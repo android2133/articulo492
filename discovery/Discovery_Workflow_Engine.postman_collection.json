@@ -1,0 +1,670 @@
+{
+	"info": {
+		"name": "Discovery Workflow Engine",
+		"description": "Colección completa para interactuar con el sistema Discovery que incluye el Workflow Engine y Pioneer (servicio de steps)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "api_base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "pioneer_base_url",
+			"value": "http://localhost:8001",
+			"type": "string"
+		},
+		{
+			"key": "workflow_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "step_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "execution_id",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Health Checks",
+			"item": [
+				{
+					"name": "API Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_base_url}}/",
+							"host": ["{{api_base_url}}"],
+							"path": [""]
+						}
+					}
+				},
+				{
+					"name": "Pioneer Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{pioneer_base_url}}/",
+							"host": ["{{pioneer_base_url}}"],
+							"path": [""]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Workflows",
+			"item": [
+				{
+					"name": "Create Workflow",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    pm.collectionVariables.set('workflow_id', response.id);",
+									"    console.log('Workflow ID saved:', response.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"User Processing Workflow\",\n  \"description\": \"Workflow para procesar usuarios con validaciones dinámicas\",\n  \"mode\": \"automatic\"\n}"
+						},
+						"url": {
+							"raw": "{{api_base_url}}/workflows",
+							"host": ["{{api_base_url}}"],
+							"path": ["workflows"]
+						}
+					}
+				},
+				{
+					"name": "List Workflows",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_base_url}}/workflows",
+							"host": ["{{api_base_url}}"],
+							"path": ["workflows"]
+						}
+					}
+				},
+				{
+					"name": "Get Workflow",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_base_url}}/workflows/{{workflow_id}}",
+							"host": ["{{api_base_url}}"],
+							"path": ["workflows", "{{workflow_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Update Workflow",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"User Processing Workflow - Updated\",\n  \"description\": \"Workflow actualizado para procesar usuarios\"\n}"
+						},
+						"url": {
+							"raw": "{{api_base_url}}/workflows/{{workflow_id}}",
+							"host": ["{{api_base_url}}"],
+							"path": ["workflows", "{{workflow_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete Workflow",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{api_base_url}}/workflows/{{workflow_id}}",
+							"host": ["{{api_base_url}}"],
+							"path": ["workflows", "{{workflow_id}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Steps",
+			"item": [
+				{
+					"name": "List Available Steps (from Pioneer)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_base_url}}/available-steps",
+							"host": ["{{api_base_url}}"],
+							"path": ["available-steps"]
+						}
+					}
+				},
+				{
+					"name": "List Available Steps (Direct from Pioneer)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{pioneer_base_url}}/steps",
+							"host": ["{{pioneer_base_url}}"],
+							"path": ["steps"]
+						}
+					}
+				},
+				{
+					"name": "Add Step to Workflow",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    pm.collectionVariables.set('step_id', response.id);",
+									"    console.log('Step ID saved:', response.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Carga Usuario\",\n  \"handler\": \"fetch_user\",\n  \"order\": 1,\n  \"max_visits\": 3\n}"
+						},
+						"url": {
+							"raw": "{{api_base_url}}/workflows/{{workflow_id}}/steps",
+							"host": ["{{api_base_url}}"],
+							"path": ["workflows", "{{workflow_id}}", "steps"]
+						}
+					}
+				},
+				{
+					"name": "List Steps in Workflow",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_base_url}}/workflows/{{workflow_id}}/steps",
+							"host": ["{{api_base_url}}"],
+							"path": ["workflows", "{{workflow_id}}", "steps"]
+						}
+					}
+				},
+				{
+					"name": "Get Step Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_base_url}}/steps/{{step_id}}",
+							"host": ["{{api_base_url}}"],
+							"path": ["steps", "{{step_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Update Step",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Carga Usuario - Actualizado\",\n  \"max_visits\": 5\n}"
+						},
+						"url": {
+							"raw": "{{api_base_url}}/steps/{{step_id}}",
+							"host": ["{{api_base_url}}"],
+							"path": ["steps", "{{step_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete Step",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{api_base_url}}/steps/{{step_id}}",
+							"host": ["{{api_base_url}}"],
+							"path": ["steps", "{{step_id}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Complete Workflow Setup",
+			"item": [
+				{
+					"name": "1. Add Fetch User Step",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    console.log('Step 1 - Fetch User added successfully');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Carga Usuario\",\n  \"handler\": \"fetch_user\",\n  \"order\": 1,\n  \"max_visits\": 3\n}"
+						},
+						"url": {
+							"raw": "{{api_base_url}}/workflows/{{workflow_id}}/steps",
+							"host": ["{{api_base_url}}"],
+							"path": ["workflows", "{{workflow_id}}", "steps"]
+						}
+					}
+				},
+				{
+					"name": "2. Add Validate User Step",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Validación Usuario\",\n  \"handler\": \"validate_user\",\n  \"order\": 2,\n  \"max_visits\": 3\n}"
+						},
+						"url": {
+							"raw": "{{api_base_url}}/workflows/{{workflow_id}}/steps",
+							"host": ["{{api_base_url}}"],
+							"path": ["workflows", "{{workflow_id}}", "steps"]
+						}
+					}
+				},
+				{
+					"name": "3. Add Transform Data Step",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Transformación\",\n  \"handler\": \"transform_data\",\n  \"order\": 3,\n  \"max_visits\": 3\n}"
+						},
+						"url": {
+							"raw": "{{api_base_url}}/workflows/{{workflow_id}}/steps",
+							"host": ["{{api_base_url}}"],
+							"path": ["workflows", "{{workflow_id}}", "steps"]
+						}
+					}
+				},
+				{
+					"name": "4. Add Decision Step",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Decisión\",\n  \"handler\": \"decide\",\n  \"order\": 4,\n  \"max_visits\": 3\n}"
+						},
+						"url": {
+							"raw": "{{api_base_url}}/workflows/{{workflow_id}}/steps",
+							"host": ["{{api_base_url}}"],
+							"path": ["workflows", "{{workflow_id}}", "steps"]
+						}
+					}
+				},
+				{
+					"name": "5. Add Approve User Step",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Aprobar Usuario\",\n  \"handler\": \"approve_user\",\n  \"order\": 5,\n  \"max_visits\": 3\n}"
+						},
+						"url": {
+							"raw": "{{api_base_url}}/workflows/{{workflow_id}}/steps",
+							"host": ["{{api_base_url}}"],
+							"path": ["workflows", "{{workflow_id}}", "steps"]
+						}
+					}
+				},
+				{
+					"name": "6. Add Reject User Step",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Rechazar Usuario\",\n  \"handler\": \"reject_user\",\n  \"order\": 6,\n  \"max_visits\": 3\n}"
+						},
+						"url": {
+							"raw": "{{api_base_url}}/workflows/{{workflow_id}}/steps",
+							"host": ["{{api_base_url}}"],
+							"path": ["workflows", "{{workflow_id}}", "steps"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Executions",
+			"item": [
+				{
+					"name": "Execute Workflow (Admin User - Should Approve)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    pm.collectionVariables.set('execution_id', response.id);",
+									"    console.log('Execution ID saved:', response.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mode\": \"automatic\",\n  \"initial_data\": {\n    \"user_id\": 25,\n    \"propiedadA\": \"admin\",\n    \"propiedadB\": \"admin_user\",\n    \"manual\": false\n  }\n}"
+						},
+						"url": {
+							"raw": "{{api_base_url}}/workflows/{{workflow_id}}/execute",
+							"host": ["{{api_base_url}}"],
+							"path": ["workflows", "{{workflow_id}}", "execute"]
+						}
+					}
+				},
+				{
+					"name": "Execute Workflow (Normal User - Should Reject)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mode\": \"automatic\",\n  \"initial_data\": {\n    \"user_id\": 2,\n    \"propiedadA\": \"user\",\n    \"propiedadB\": \"normal_user\",\n    \"manual\": false\n  }\n}"
+						},
+						"url": {
+							"raw": "{{api_base_url}}/workflows/{{workflow_id}}/execute",
+							"host": ["{{api_base_url}}"],
+							"path": ["workflows", "{{workflow_id}}", "execute"]
+						}
+					}
+				},
+				{
+					"name": "Execute Workflow (Blocked User)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mode\": \"automatic\",\n  \"initial_data\": {\n    \"user_id\": 3,\n    \"propiedadA\": \"blocked\",\n    \"propiedadB\": \"bl\",\n    \"manual\": false\n  }\n}"
+						},
+						"url": {
+							"raw": "{{api_base_url}}/workflows/{{workflow_id}}/execute",
+							"host": ["{{api_base_url}}"],
+							"path": ["workflows", "{{workflow_id}}", "execute"]
+						}
+					}
+				},
+				{
+					"name": "Execute Workflow (Manual Processing)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mode\": \"step_by_step\",\n  \"initial_data\": {\n    \"user_id\": 4,\n    \"propiedadA\": \"user\",\n    \"propiedadB\": \"manual_user\",\n    \"manual\": true\n  }\n}"
+						},
+						"url": {
+							"raw": "{{api_base_url}}/workflows/{{workflow_id}}/execute",
+							"host": ["{{api_base_url}}"],
+							"path": ["workflows", "{{workflow_id}}", "execute"]
+						}
+					}
+				},
+				{
+					"name": "List Executions",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_base_url}}/executions",
+							"host": ["{{api_base_url}}"],
+							"path": ["executions"]
+						}
+					}
+				},
+				{
+					"name": "Get Execution Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_base_url}}/executions/{{execution_id}}",
+							"host": ["{{api_base_url}}"],
+							"path": ["executions", "{{execution_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Continue Execution (Next Step)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{api_base_url}}/executions/{{execution_id}}/continue",
+							"host": ["{{api_base_url}}"],
+							"path": ["executions", "{{execution_id}}", "continue"]
+						}
+					}
+				},
+				{
+					"name": "Get Execution Steps",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_base_url}}/executions/{{execution_id}}/steps",
+							"host": ["{{api_base_url}}"],
+							"path": ["executions", "{{execution_id}}", "steps"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Pioneer Direct Testing",
+			"item": [
+				{
+					"name": "Test Fetch User (Direct)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"step\": \"fetch_user\",\n  \"context\": {\n    \"user_id\": 5,\n    \"propiedadA\": \"admin\",\n    \"propiedadB\": \"test_user\",\n    \"manual\": false\n  },\n  \"config\": {}\n}"
+						},
+						"url": {
+							"raw": "{{pioneer_base_url}}/steps/fetch_user",
+							"host": ["{{pioneer_base_url}}"],
+							"path": ["steps", "fetch_user"]
+						}
+					}
+				},
+				{
+					"name": "Test Validate User (Direct)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"step\": \"validate_user\",\n  \"context\": {\n    \"user\": {\n      \"id\": 5,\n      \"name\": \"User5\",\n      \"email\": \"user5@example.com\"\n    },\n    \"dynamic_properties\": {\n      \"propiedadA\": \"admin\",\n      \"propiedadB\": \"test_user\",\n      \"manual\": false\n    }\n  },\n  \"config\": {}\n}"
+						},
+						"url": {
+							"raw": "{{pioneer_base_url}}/steps/validate_user",
+							"host": ["{{pioneer_base_url}}"],
+							"path": ["steps", "validate_user"]
+						}
+					}
+				},
+				{
+					"name": "Test Transform Data (Direct)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"step\": \"transform_data\",\n  \"context\": {\n    \"user\": {\n      \"id\": 5\n    }\n  },\n  \"config\": {\n    \"value\": 10,\n    \"factor\": 3\n  }\n}"
+						},
+						"url": {
+							"raw": "{{pioneer_base_url}}/steps/transform_data",
+							"host": ["{{pioneer_base_url}}"],
+							"path": ["steps", "transform_data"]
+						}
+					}
+				},
+				{
+					"name": "Test Decide (Direct)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"step\": \"decide\",\n  \"context\": {\n    \"transformed\": 30\n  },\n  \"config\": {\n    \"threshold\": 20\n  }\n}"
+						},
+						"url": {
+							"raw": "{{pioneer_base_url}}/steps/decide",
+							"host": ["{{pioneer_base_url}}"],
+							"path": ["steps", "decide"]
+						}
+					}
+				}
+			]
+		}
+	]
+}

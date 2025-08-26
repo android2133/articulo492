@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor de Workflows Asíncronos</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .status.running { background-color: #d1ecf1; color: #0c5460; }
+        .status.completed { background-color: #d4edda; color: #155724; }
+        .status.failed { background-color: #f8d7da; color: #721c24; }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #28a745;
+            transition: width 0.3s ease;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        .log-entry.info { background-color: #d1ecf1; }
+        .log-entry.success { background-color: #d4edda; }
+        .log-entry.warning { background-color: #fff3cd; }
+        .log-entry.error { background-color: #f8d7da; }
+        .step-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+        }
+        .step-item {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .step-item:last-child {
+            border-bottom: none;
+        }
+        .step-status {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            color: white;
+        }
+        .step-status.success { background-color: #28a745; }
+        .step-status.running { background-color: #17a2b8; }
+        .step-status.failed { background-color: #dc3545; }
+        .step-status.pending { background-color: #6c757d; }
+    </style>
+</head>
+<body>
+    <h1>🚀 Monitor de Workflows Asíncronos</h1>
+    
+    <!-- Formulario para iniciar workflow -->
+    <div class="container">
+        <h2>Iniciar Nuevo Workflow</h2>
+        <div class="form-group">
+            <label>Discovery URL:</label>
+            <input type="text" id="discoveryUrl" value="http://localhost:8080" />
+        </div>
+        <div class="form-group">
+            <label>Workflow ID:</label>
+            <input type="text" id="workflowId" placeholder="uuid-del-workflow" />
+        </div>
+        <div class="form-group">
+            <label>Nombre de documento:</label>
+            <input type="text" id="documentName" value="documento_ejemplo.pdf" />
+        </div>
+        <div class="form-group">
+            <label>UUID Proceso:</label>
+            <input type="text" id="processUuid" />
+        </div>
+        <div class="form-group">
+            <label>Base64 del documento (opcional):</label>
+            <textarea id="base64Content" rows="3" placeholder="JVBERi0xLjQK..."></textarea>
+        </div>
+        <button onclick="startWorkflow()">🚀 Iniciar Workflow Asíncrono</button>
+        <button onclick="startWorkflowLegacy()">🔄 Usar API Legacy</button>
+    </div>
+    
+    <!-- Monitor de ejecución -->
+    <div class="container" id="monitorSection" style="display: none;">
+        <h2>📊 Monitor de Ejecución</h2>
+        
+        <div class="form-group">
+            <label>Execution ID:</label>
+            <input type="text" id="executionId" readonly />
+            <button onclick="connectWebSocket()">🔌 Conectar WebSocket</button>
+            <button onclick="checkStatus()">🔍 Verificar Estado</button>
+            <button onclick="clearLog()">🗑️ Limpiar Log</button>
+        </div>
+        
+        <div class="status" id="workflowStatus">
+            Estado: <span id="statusText">Desconocido</span>
+        </div>
+        
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+        </div>
+        
+        <div id="progressText">Progreso: 0% (0/0 steps completados)</div>
+        
+        <div class="form-group">
+            <label>Step Actual:</label>
+            <input type="text" id="currentStep" readonly />
+        </div>
+        
+        <h3>📋 Historial de Steps</h3>
+        <div class="step-list" id="stepsList">
+            <div style="padding: 20px; text-align: center; color: #6c757d;">
+                No hay steps ejecutados aún
+            </div>
+        </div>
+        
+        <h3>📡 Log de Eventos (WebSocket)</h3>
+        <div class="log" id="eventLog">
+            <div class="log-entry info">
+                [Inicio] Listo para recibir eventos...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let websocket = null;
+        let currentExecutionId = null;
+        
+        // Generar UUID para proceso
+        document.getElementById('processUuid').value = 'proceso_' + Date.now();
+        
+        function log(message, type = 'info') {
+            const logElement = document.getElementById('eventLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerHTML = `[${timestamp}] ${message}`;
+            logElement.appendChild(entry);
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+        
+        async function startWorkflow() {
+            const discoveryUrl = document.getElementById('discoveryUrl').value;
+            const workflowId = document.getElementById('workflowId').value;
+            const documentName = document.getElementById('documentName').value;
+            const processUuid = document.getElementById('processUuid').value;
+            const base64Content = document.getElementById('base64Content').value;
+            
+            if (!workflowId) {
+                alert('Por favor ingresa un Workflow ID');
+                return;
+            }
+            
+            const payload = {
+                nombre_documento: documentName,
+                uuid_proceso: processUuid,
+                manual: false
+            };
+            
+            if (base64Content) {
+                payload.base64 = base64Content;
+                payload.mime = 'application/pdf';
+            }
+            
+            try {
+                log('🚀 Iniciando workflow asíncrono...', 'info');
+                
+                const response = await fetch(`${discoveryUrl}/workflows/${workflowId}/execute-async`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    log(`✅ Workflow iniciado exitosamente! ID: ${result.execution_id}`, 'success');
+                    
+                    currentExecutionId = result.execution_id;
+                    document.getElementById('executionId').value = result.execution_id;
+                    document.getElementById('monitorSection').style.display = 'block';
+                    
+                    // Auto-conectar WebSocket
+                    await connectWebSocket();
+                    
+                } else {
+                    const error = await response.text();
+                    log(`❌ Error iniciando workflow: ${response.status} - ${error}`, 'error');
+                }
+            } catch (error) {
+                log(`💥 Error de conexión: ${error.message}`, 'error');
+            }
+        }
+        
+        async function startWorkflowLegacy() {
+            const discoveryUrl = document.getElementById('discoveryUrl').value;
+            const workflowId = document.getElementById('workflowId').value;
+            const documentName = document.getElementById('documentName').value;
+            const processUuid = document.getElementById('processUuid').value;
+            const base64Content = document.getElementById('base64Content').value;
+            
+            if (!workflowId) {
+                alert('Por favor ingresa un Workflow ID');
+                return;
+            }
+            
+            const payload = {
+                workflow_id: workflowId,
+                mode: 'automatic',
+                data: {
+                    nombre_documento: documentName,
+                    uuid_proceso: processUuid,
+                    manual: false
+                }
+            };
+            
+            if (base64Content) {
+                payload.data.base64 = base64Content;
+                payload.data.mime = 'application/pdf';
+            }
+            
+            try {
+                log('🔄 Iniciando workflow legacy asíncrono...', 'info');
+                
+                const response = await fetch(`${discoveryUrl}/execute-async/`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    log(`✅ Workflow legacy iniciado! ID: ${result.execution_id}`, 'success');
+                    
+                    currentExecutionId = result.execution_id;
+                    document.getElementById('executionId').value = result.execution_id;
+                    document.getElementById('monitorSection').style.display = 'block';
+                    
+                    // Auto-conectar WebSocket
+                    await connectWebSocket();
+                    
+                } else {
+                    const error = await response.text();
+                    log(`❌ Error iniciando workflow legacy: ${response.status} - ${error}`, 'error');
+                }
+            } catch (error) {
+                log(`💥 Error de conexión: ${error.message}`, 'error');
+            }
+        }
+        
+        async function connectWebSocket() {
+            const executionId = document.getElementById('executionId').value || currentExecutionId;
+            if (!executionId) {
+                alert('No hay execution ID disponible');
+                return;
+            }
+            
+            if (websocket) {
+                websocket.close();
+            }
+            
+            try {
+                const wsUrl = `ws://localhost:8080/ws/${executionId}`;
+                log(`🔌 Conectando a WebSocket: ${wsUrl}`, 'info');
+                
+                websocket = new WebSocket(wsUrl);
+                
+                websocket.onopen = () => {
+                    log('✅ Conectado al WebSocket', 'success');
+                };
+                
+                websocket.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleWebSocketMessage(data);
+                    } catch (e) {
+                        log(`⚠️ Mensaje no JSON: ${event.data}`, 'warning');
+                    }
+                };
+                
+                websocket.onclose = () => {
+                    log('🔌 WebSocket desconectado', 'warning');
+                };
+                
+                websocket.onerror = (error) => {
+                    log(`❌ Error en WebSocket: ${error}`, 'error');
+                };
+                
+            } catch (error) {
+                log(`💥 Error conectando WebSocket: ${error.message}`, 'error');
+            }
+        }
+        
+        function handleWebSocketMessage(data) {
+            const event = data.event || 'unknown';
+            
+            switch (event) {
+                case 'workflow_started':
+                    log('🚀 Workflow iniciado', 'success');
+                    updateStatus('running', 'Ejecutándose');
+                    break;
+                    
+                case 'step_started':
+                    const stepName = data.step || 'Unknown';
+                    log(`▶️ Step iniciado: ${stepName}`, 'info');
+                    document.getElementById('currentStep').value = stepName;
+                    break;
+                    
+                case 'step_progress':
+                    const {step_name, progress} = data;
+                    const percentage = progress.percentage || 0;
+                    const message = progress.message || '';
+                    log(`📈 ${step_name}: ${percentage}% - ${message}`, 'info');
+                    break;
+                    
+                case 'step_finished':
+                    const finishedStep = data.step || 'Unknown';
+                    log(`✅ Step completado: ${finishedStep}`, 'success');
+                    break;
+                    
+                case 'step_completed':
+                    const completedStep = data.step_name || 'Unknown';
+                    const result = data.result || {};
+                    const success = result.success || false;
+                    log(`✅ Step finalizado: ${completedStep} - ${success ? 'Éxito' : 'Error'}`, success ? 'success' : 'error');
+                    break;
+                    
+                case 'workflow_completed':
+                    log('🎉 Workflow COMPLETADO exitosamente!', 'success');
+                    updateStatus('completed', 'Completado');
+                    break;
+                    
+                case 'workflow_failed':
+                    log('❌ Workflow FALLÓ', 'error');
+                    updateStatus('failed', 'Falló');
+                    break;
+                    
+                case 'workflow_error':
+                    const error = data.error || 'Unknown error';
+                    log(`💥 Error en workflow: ${error}`, 'error');
+                    updateStatus('failed', 'Error');
+                    break;
+                    
+                default:
+                    log(`📨 Evento: ${event}`, 'info');
+                    console.log('Datos del evento:', data);
+            }
+        }
+        
+        function updateStatus(status, text) {
+            const statusElement = document.getElementById('workflowStatus');
+            const statusTextElement = document.getElementById('statusText');
+            
+            statusElement.className = `status ${status}`;
+            statusTextElement.textContent = text;
+        }
+        
+        async function checkStatus() {
+            const executionId = document.getElementById('executionId').value || currentExecutionId;
+            if (!executionId) {
+                alert('No hay execution ID disponible');
+                return;
+            }
+            
+            const discoveryUrl = document.getElementById('discoveryUrl').value;
+            
+            try {
+                log('🔍 Verificando estado...', 'info');
+                
+                const response = await fetch(`${discoveryUrl}/executions/${executionId}/status`);
+                
+                if (response.ok) {
+                    const status = response.json();
+                    updateUI(status);
+                    log(`📊 Estado actualizado: ${status.status}`, 'success');
+                } else {
+                    log(`❌ Error verificando estado: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                log(`💥 Error de conexión: ${error.message}`, 'error');
+            }
+        }
+        
+        function updateUI(status) {
+            // Actualizar status general
+            updateStatus(status.status, status.status);
+            
+            // Actualizar progreso
+            const progress = status.progress || {};
+            const percentage = progress.percentage || 0;
+            document.getElementById('progressFill').style.width = `${percentage}%`;
+            document.getElementById('progressText').textContent = 
+                `Progreso: ${percentage}% (${progress.completed_steps}/${progress.total_steps} steps completados)`;
+            
+            // Actualizar step actual
+            if (status.current_step) {
+                document.getElementById('currentStep').value = status.current_step.name;
+            }
+            
+            // Actualizar lista de steps
+            const stepsList = document.getElementById('stepsList');
+            if (status.steps_history && status.steps_history.length > 0) {
+                stepsList.innerHTML = status.steps_history.map(step => `
+                    <div class="step-item">
+                        <span>${step.step_name}</span>
+                        <span class="step-status ${step.status}">${step.status}</span>
+                    </div>
+                `).join('');
+            }
+        }
+        
+        function clearLog() {
+            const logElement = document.getElementById('eventLog');
+            logElement.innerHTML = '<div class="log-entry info">[Inicio] Log limpiado...</div>';
+        }
+        
+        // Cerrar WebSocket al salir
+        window.addEventListener('beforeunload', () => {
+            if (websocket) {
+                websocket.close();
+            }
+        });
+    </script>
+</body>
+</html>

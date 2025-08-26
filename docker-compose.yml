@@ -1,0 +1,112 @@
+services:
+  # Base de datos compartida para todos los servicios
+  db:
+    image: postgres:15
+    container_name: shared_db
+    environment:
+      POSTGRES_DB: discovery
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./discovery/db:/docker-entrypoint-initdb.d   # Carga schema.sql y seed.sql
+      - shared_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Servicio Discovery API
+  discovery:
+    build: ./discovery/api
+    container_name: discovery_api
+    depends_on:
+      - db
+      - pioneer
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/discovery
+      PIONEER_URL: http://pioneer:8000
+      CHALLENGER_URL: http://challenger:8000
+    ports:
+      - "8000:8000"
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0 --port 8000
+      --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"] 
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Servicio Pioneer (Steps Service)
+  pioneer:
+    build: ./pioneer
+    shm_size: "2gb"
+    container_name: pioneer_service
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/discovery
+      DISCOVERY_URL: http://discovery:8000
+    ports:
+      - "8001:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Servicio Challenger
+  # challenger:
+  #   build: ./challenger
+  #   container_name: challenger_service
+  #   depends_on:
+  #     - db
+  #   environment:
+  #     DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/discovery
+  #     DISCOVERY_URL: http://discovery:8000
+  #     PIONEER_URL: http://pioneer:8000
+  #   ports:
+  #     - "8002:8000"
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #   restart: unless-stopped
+
+  # Servicio Geminis (PDF Annotator)
+  geminis:
+    build: ./geminis
+    container_name: geminis_service
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/discovery
+      WORKER_CONCURRENCY: 2
+      POLL_INTERVAL_SEC: 1.0
+      # Variables para GCP
+      GOOGLE_APPLICATION_CREDENTIALS: /var/secrets/google/credentials.json
+      GOOGLE_CLOUD_PROJECT: perdidas-totales-pruebas
+    ports:
+      - "8003:8080"
+    volumes:
+      - ./pioneer/credentials.json:/var/secrets/google/credentials.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  shared_pgdata:
+
+networks:
+  default:
+    name: discovery_network

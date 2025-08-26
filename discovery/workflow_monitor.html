@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor de Workflows Asíncronos</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .execution-form {
+            display: grid;
+            gap: 15px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .form-group label {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .form-group input, .form-group textarea, .form-group select {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        .btn-primary {
+            background-color: #3498db;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #2980b9;
+        }
+        .btn-success {
+            background-color: #27ae60;
+            color: white;
+        }
+        .btn-success:hover {
+            background-color: #229954;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #ecf0f1;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #3498db;
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .status-running {
+            background-color: #f39c12;
+            color: white;
+        }
+        .status-completed {
+            background-color: #27ae60;
+            color: white;
+        }
+        .status-failed {
+            background-color: #e74c3c;
+            color: white;
+        }
+        .execution-item {
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #f9f9f9;
+        }
+        .execution-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .execution-id {
+            font-family: monospace;
+            background: #ecf0f1;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        .log-container {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 2px 0;
+        }
+        .log-timestamp {
+            color: #95a5a6;
+        }
+        .log-event {
+            color: #3498db;
+            font-weight: bold;
+        }
+        .log-data {
+            color: #e8f4fd;
+        }
+        .current-task {
+            background: #3498db;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Monitor de Workflows Asíncronos</h1>
+            <p>Sistema de seguimiento en tiempo real para workflows de Discovery</p>
+        </div>
+
+        <!-- Formulario para iniciar nuevos workflows -->
+        <div class="card">
+            <h2>🆕 Iniciar Nuevo Workflow</h2>
+            <form class="execution-form" id="workflowForm">
+                <div class="form-group">
+                    <label for="workflowId">Workflow ID:</label>
+                    <input type="text" id="workflowId" value="123e4567-e89b-12d3-a456-426614174000" placeholder="UUID del workflow">
+                </div>
+                
+                <div class="form-group">
+                    <label for="executionMode">Modo de Ejecución:</label>
+                    <select id="executionMode">
+                        <option value="automatic">Automático</option>
+                        <option value="manual">Manual</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="documentData">Datos del Documento (JSON):</label>
+                    <textarea id="documentData" placeholder="Ej: {'base64': '...', 'mime': 'application/pdf', 'nombre_documento': 'test.pdf'}"></textarea>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">🚀 Iniciar Workflow Asíncrono</button>
+            </form>
+        </div>
+
+        <!-- Sección de ejecuciones activas -->
+        <div class="card">
+            <h2>📊 Ejecuciones Activas</h2>
+            <div id="activeExecutions">
+                <p>No hay ejecuciones activas. Inicia un workflow para ver el progreso aquí.</p>
+            </div>
+        </div>
+
+        <!-- Consultar ejecución por ID -->
+        <div class="card">
+            <h2>🔍 Consultar Ejecución Existente</h2>
+            <div class="execution-form">
+                <div class="form-group">
+                    <label for="executionId">Execution ID:</label>
+                    <input type="text" id="executionId" placeholder="UUID de la ejecución">
+                </div>
+                <button type="button" class="btn btn-success" onclick="trackExecution()">🔗 Conectar y Seguir</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuración
+        const DISCOVERY_URL = 'http://localhost:8080';
+        
+        // Estado global
+        let activeExecutions = new Map();
+        let websockets = new Map();
+
+        // Elementos del DOM
+        const workflowForm = document.getElementById('workflowForm');
+        const activeExecutionsContainer = document.getElementById('activeExecutions');
+
+        // Inicialización
+        workflowForm.addEventListener('submit', handleWorkflowSubmit);
+
+        async function handleWorkflowSubmit(event) {
+            event.preventDefault();
+            
+            const workflowId = document.getElementById('workflowId').value.trim();
+            const mode = document.getElementById('executionMode').value;
+            const documentDataText = document.getElementById('documentData').value.trim();
+            
+            if (!workflowId) {
+                alert('Por favor ingresa un Workflow ID');
+                return;
+            }
+
+            let documentData = {};
+            if (documentDataText) {
+                try {
+                    documentData = JSON.parse(documentDataText);
+                } catch (e) {
+                    alert('Error en formato JSON de los datos del documento: ' + e.message);
+                    return;
+                }
+            }
+
+            try {
+                await startAsyncWorkflow(workflowId, mode, documentData);
+            } catch (error) {
+                alert('Error iniciando workflow: ' + error.message);
+                console.error('Error:', error);
+            }
+        }
+
+        async function startAsyncWorkflow(workflowId, mode, data) {
+            const payload = {
+                workflow_id: workflowId,
+                mode: mode,
+                data: data
+            };
+
+            const response = await fetch(`${DISCOVERY_URL}/execute-async/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+            }
+
+            const result = await response.json();
+            console.log('Workflow iniciado:', result);
+
+            // Agregar a seguimiento
+            trackExecutionById(result.execution_id);
+            
+            // Limpiar formulario
+            document.getElementById('documentData').value = '';
+        }
+
+        async function trackExecution() {
+            const executionId = document.getElementById('executionId').value.trim();
+            if (!executionId) {
+                alert('Por favor ingresa un Execution ID');
+                return;
+            }
+
+            trackExecutionById(executionId);
+            document.getElementById('executionId').value = '';
+        }
+
+        async function trackExecutionById(executionId) {
+            if (activeExecutions.has(executionId)) {
+                console.log('Ya se está siguiendo esta ejecución');
+                return;
+            }
+
+            try {
+                // Obtener estado inicial
+                const status = await getExecutionStatus(executionId);
+                
+                // Crear elemento UI
+                const executionElement = createExecutionElement(executionId, status);
+                activeExecutions.set(executionId, {
+                    element: executionElement,
+                    status: status
+                });
+
+                updateActiveExecutionsDisplay();
+
+                // Conectar WebSocket
+                connectWebSocket(executionId);
+
+                // Hacer polling cada 5 segundos como backup
+                startPolling(executionId);
+
+            } catch (error) {
+                alert('Error obteniendo estado de ejecución: ' + error.message);
+                console.error('Error:', error);
+            }
+        }
+
+        async function getExecutionStatus(executionId) {
+            const response = await fetch(`${DISCOVERY_URL}/executions/${executionId}/status`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+            }
+
+            return await response.json();
+        }
+
+        function createExecutionElement(executionId, status) {
+            const element = document.createElement('div');
+            element.className = 'execution-item';
+            element.id = `execution-${executionId}`;
+            
+            updateExecutionElement(element, executionId, status);
+            
+            return element;
+        }
+
+        function updateExecutionElement(element, executionId, status) {
+            const progress = status.progress || {};
+            const currentStep = status.current_step || {};
+            
+            element.innerHTML = `
+                <div class="execution-header">
+                    <div>
+                        <strong>Workflow:</strong> ${status.workflow_name || 'Unknown'}
+                        <span class="execution-id">${executionId}</span>
+                    </div>
+                    <span class="status status-${status.status}">${status.status}</span>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${progress.percentage || 0}%">
+                        ${progress.percentage || 0}%
+                    </div>
+                </div>
+                
+                <div>
+                    <strong>Progreso:</strong> ${progress.completed_steps || 0}/${progress.total_steps || 0} steps
+                    ${progress.failed_steps > 0 ? `(${progress.failed_steps} fallidos)` : ''}
+                </div>
+                
+                ${currentStep.name ? `
+                    <div class="current-task">
+                        🔄 Step actual: ${currentStep.name} (orden ${currentStep.order || 'N/A'})
+                    </div>
+                ` : ''}
+                
+                <div class="log-container" id="log-${executionId}">
+                    <div class="log-entry">
+                        <span class="log-timestamp">[${new Date().toLocaleTimeString()}]</span>
+                        <span class="log-event">INIT</span>
+                        <span class="log-data">Conectado a ejecución ${executionId}</span>
+                    </div>
+                </div>
+                
+                <button class="btn btn-primary" onclick="removeExecution('${executionId}')" style="margin-top: 10px;">
+                    ❌ Dejar de Seguir
+                </button>
+            `;
+        }
+
+        function connectWebSocket(executionId) {
+            if (websockets.has(executionId)) {
+                websockets.get(executionId).close();
+            }
+
+            const wsUrl = `ws://localhost:8080/ws/${executionId}`;
+            const ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log(`WebSocket conectado para ${executionId}`);
+                addLogEntry(executionId, 'WS_CONNECTED', 'WebSocket conectado');
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log(`WebSocket mensaje para ${executionId}:`, data);
+                    
+                    handleWebSocketMessage(executionId, data);
+                } catch (error) {
+                    console.error('Error procesando mensaje WebSocket:', error);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error(`WebSocket error para ${executionId}:`, error);
+                addLogEntry(executionId, 'WS_ERROR', `Error de conexión: ${error.message || 'Desconocido'}`);
+            };
+
+            ws.onclose = () => {
+                console.log(`WebSocket cerrado para ${executionId}`);
+                addLogEntry(executionId, 'WS_CLOSED', 'WebSocket desconectado');
+                
+                // Reconectar si la ejecución sigue activa
+                setTimeout(() => {
+                    if (activeExecutions.has(executionId)) {
+                        const execution = activeExecutions.get(executionId);
+                        if (execution.status.status === 'running') {
+                            console.log(`Reconectando WebSocket para ${executionId}`);
+                            connectWebSocket(executionId);
+                        }
+                    }
+                }, 5000);
+            };
+
+            websockets.set(executionId, ws);
+        }
+
+        function handleWebSocketMessage(executionId, data) {
+            const event = data.event;
+            
+            addLogEntry(executionId, event.toUpperCase(), JSON.stringify(data));
+            
+            // Refrescar estado después de cada evento
+            setTimeout(() => refreshExecutionStatus(executionId), 500);
+        }
+
+        function addLogEntry(executionId, event, message) {
+            const logContainer = document.getElementById(`log-${executionId}`);
+            if (!logContainer) return;
+
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.innerHTML = `
+                <span class="log-timestamp">[${timestamp}]</span>
+                <span class="log-event">${event}</span>
+                <span class="log-data">${message}</span>
+            `;
+
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        async function refreshExecutionStatus(executionId) {
+            if (!activeExecutions.has(executionId)) return;
+
+            try {
+                const status = await getExecutionStatus(executionId);
+                const execution = activeExecutions.get(executionId);
+                execution.status = status;
+
+                updateExecutionElement(execution.element, executionId, status);
+
+                // Si terminó, cerrar WebSocket
+                if (status.status === 'completed' || status.status === 'failed') {
+                    if (websockets.has(executionId)) {
+                        websockets.get(executionId).close();
+                        websockets.delete(executionId);
+                    }
+                }
+            } catch (error) {
+                console.error(`Error refrescando estado de ${executionId}:`, error);
+            }
+        }
+
+        function startPolling(executionId) {
+            const pollInterval = setInterval(async () => {
+                if (!activeExecutions.has(executionId)) {
+                    clearInterval(pollInterval);
+                    return;
+                }
+
+                const execution = activeExecutions.get(executionId);
+                if (execution.status.status === 'completed' || execution.status.status === 'failed') {
+                    clearInterval(pollInterval);
+                    return;
+                }
+
+                await refreshExecutionStatus(executionId);
+            }, 5000);
+        }
+
+        function removeExecution(executionId) {
+            if (websockets.has(executionId)) {
+                websockets.get(executionId).close();
+                websockets.delete(executionId);
+            }
+
+            if (activeExecutions.has(executionId)) {
+                activeExecutions.delete(executionId);
+                updateActiveExecutionsDisplay();
+            }
+        }
+
+        function updateActiveExecutionsDisplay() {
+            if (activeExecutions.size === 0) {
+                activeExecutionsContainer.innerHTML = '<p>No hay ejecuciones activas. Inicia un workflow para ver el progreso aquí.</p>';
+                return;
+            }
+
+            activeExecutionsContainer.innerHTML = '';
+            for (const [executionId, execution] of activeExecutions) {
+                activeExecutionsContainer.appendChild(execution.element);
+            }
+        }
+
+        // Datos de ejemplo predefinidos
+        document.addEventListener('DOMContentLoaded', () => {
+            const sampleData = {
+                "base64": "JVBERi0xLjQKJeLjz9MKMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFszIDAgUl0KL0NvdW50IDEKPD4KZW5kb2JqCjMgMCBvYmoKPDwKL1R5cGUgL1BhZ2UKL1BhcmVudCAyIDAgUkovUmVzb3VyY2VzIDw8Ci9Gb250IDw8Ci9GMSA0IDAgUgo+Pgo+PgovTWVkaWFCb3ggWzAgMCA2MTIgNzkyXQovQ29udGVudHMgNSAwIFIKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL1R5cGUgL0ZvbnQKL1N1YnR5cGUgL1R5cGUxCi9CYXNlRm9udCAvSGVsdmV0aWNhCj4+CmVuZG9iago1IDAgb2JqCjw8Ci9MZW5ndGggNDQKPj4Kc3RyZWFtCkJUCi9GMSA5IFRmCjEwIDUwIFRkCihIZWxsbyBXb3JsZCkgVGoKRVQKZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgNgo",
+                "mime": "application/pdf",
+                "nombre_documento": "test_document.pdf",
+                "uuid_proceso": "test_process_" + Date.now(),
+                "manual": false
+            };
+            
+            document.getElementById('documentData').value = JSON.stringify(sampleData, null, 2);
+        });
+    </script>
+</body>
+</html>

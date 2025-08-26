@@ -1,0 +1,416 @@
+{
+	"info": {
+		"_postman_id": "async-workflow-collection",
+		"name": "🚀 Sistema de Workflows Asíncronos",
+		"description": "Colección para probar el nuevo sistema de ejecución asíncrona de workflows con archivos reales.\n\n## 🎯 Flujo de Uso\n\n1. **Crear/Verificar Workflow** - Asegurar que tenemos workflows disponibles\n2. **Iniciar Ejecución Asíncrona** - Comenzar procesamiento sin esperar\n3. **Hacer Seguimiento** - Monitorear progreso via API o WebSocket\n4. **Obtener Resultados** - Recuperar datos finales cuando termine\n\n## 📋 Variables Necesarias\n\n- `discovery_base_url`: http://localhost:8000\n- `pioneer_base_url`: http://localhost:8001  \n- `execution_id`: Se obtiene al iniciar workflow\n- `workflow_id`: ID del workflow a ejecutar\n\n## 🔧 Configuración\n\nAntes de usar:\n1. Configurar variables de entorno\n2. Tener servicios corriendo (docker compose up)\n3. Preparar archivo PDF en base64",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "📋 1. Configuración y Setup",
+			"item": [
+				{
+					"name": "🔍 Verificar Servicios",
+					"item": [
+						{
+							"name": "Health Check - Discovery",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{discovery_base_url}}/",
+									"host": ["{{discovery_base_url}}"],
+									"path": [""]
+								}
+							}
+						},
+						{
+							"name": "Health Check - Pioneer",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{pioneer_base_url}}/",
+									"host": ["{{pioneer_base_url}}"],
+									"path": [""]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "📚 Obtener Workflows Disponibles",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Guardar el primer workflow ID para usar en otras requests",
+									"if (pm.response.code === 200) {",
+									"    const workflows = pm.response.json();",
+									"    if (workflows.length > 0) {",
+									"        pm.environment.set('workflow_id', workflows[0].id);",
+									"        console.log('Workflow ID guardado:', workflows[0].id);",
+									"        console.log('Nombre del workflow:', workflows[0].name);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{discovery_base_url}}/workflows",
+							"host": ["{{discovery_base_url}}"],
+							"path": ["workflows"]
+						}
+					}
+				},
+				{
+					"name": "🔧 Crear Workflow de Prueba",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Procesamiento Asíncrono de Documentos\",\n  \"mode\": \"automatic\"\n}"
+						},
+						"url": {
+							"raw": "{{discovery_base_url}}/workflows",
+							"host": ["{{discovery_base_url}}"],
+							"path": ["workflows"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "🚀 2. Ejecución Asíncrona",
+			"item": [
+				{
+					"name": "🚀 Iniciar Workflow Asíncrono (Nuevo)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Guardar execution_id para seguimiento",
+									"if (pm.response.code === 200) {",
+									"    const result = pm.response.json();",
+									"    pm.environment.set('execution_id', result.execution_id);",
+									"    console.log('🚀 Workflow iniciado!');",
+									"    console.log('📋 Execution ID:', result.execution_id);",
+									"    console.log('🔗 Tracking URL:', result.tracking_url);",
+									"    console.log('🌐 WebSocket URL:', result.websocket_url);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre_documento\": \"documento_prueba.pdf\",\n  \"uuid_proceso\": \"proceso_{{$timestamp}}\",\n  \"manual\": false,\n  \"base64\": \"JVBERi0xLjQKJcOkw7zDtsOtCjIgMCBvYmoKPDwKL0xlbmd0aCAzIDAgUgovRmlsdGVyIC9GbGF0ZURlY29kZQo+PgpzdHJlYW0KeNrjUlEIVDD0UHD29gtOLo8NMzYLjvTMyslMBwEGBk4FBkZWByYG9igGBg4NBgkNDBIaDEwM7BoaDIxA5eiUEwBWzBJAaEUKe\",\n  \"mime\": \"application/pdf\"\n}"
+						},
+						"url": {
+							"raw": "{{discovery_base_url}}/workflows/{{workflow_id}}/execute-async",
+							"host": ["{{discovery_base_url}}"],
+							"path": ["workflows", "{{workflow_id}}", "execute-async"]
+						}
+					}
+				},
+				{
+					"name": "🚀 Iniciar Workflow Asíncrono (Legacy)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Guardar execution_id para seguimiento",
+									"if (pm.response.code === 200) {",
+									"    const result = pm.response.json();",
+									"    pm.environment.set('execution_id', result.execution_id);",
+									"    console.log('🚀 Workflow legacy iniciado!');",
+									"    console.log('📋 Execution ID:', result.execution_id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"workflow_id\": \"{{workflow_id}}\",\n  \"mode\": \"automatic\",\n  \"data\": {\n    \"nombre_documento\": \"documento_legacy.pdf\",\n    \"uuid_proceso\": \"proceso_legacy_{{$timestamp}}\",\n    \"manual\": false,\n    \"base64\": \"JVBERi0xLjQKJcOkw7zDtsOtCjIgMCBvYmoKPDwKL0xlbmd0aCAzIDAgUgovRmlsdGVyIC9GbGF0ZURlY29kZQo+PgpzdHJlYW0KeNrjUlEIVDD0UHD29gtOLo8NMzYLjvTMyslMBwEGBk4FBkZWByYG9igGBg4NBgkNDBIaDEwM7BoaDIxA5eiUEwBWzBJAaEUKe\",\n    \"mime\": \"application/pdf\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{discovery_base_url}}/execute-async/",
+							"host": ["{{discovery_base_url}}"],
+							"path": ["execute-async", ""]
+						}
+					}
+				},
+				{
+					"name": "⚡ Ejecución Síncrona (Original)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"workflow_id\": \"{{workflow_id}}\",\n  \"mode\": \"automatic\",\n  \"data\": {\n    \"nombre_documento\": \"documento_sincrono.pdf\",\n    \"uuid_proceso\": \"proceso_sync_{{$timestamp}}\",\n    \"manual\": false,\n    \"base64\": \"JVBERi0xLjQKJcOkw7zDtsOtCjIgMCBvYmoKPDwKL0xlbmd0aCAzIDAgUgovRmlsdGVyIC9GbGF0ZURlY29kZQo+PgpzdHJlYW0KeNrjUlEIVDD0UHD29gtOLo8NMzYLjvTMyslMBwEGBk4FBkZWByYG9igGBg4NBgkNDBIaDEwM7BoaDIxA5eiUEwBWzBJAaEUKe\",\n    \"mime\": \"application/pdf\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{discovery_base_url}}/execute/",
+							"host": ["{{discovery_base_url}}"],
+							"path": ["execute", ""]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "📊 3. Seguimiento y Monitoreo",
+			"item": [
+				{
+					"name": "📊 Verificar Estado del Workflow",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const status = pm.response.json();",
+									"    console.log('📊 Estado del Workflow:');",
+									"    console.log('   Status:', status.status);",
+									"    console.log('   Progreso:', status.progress.percentage + '%');",
+									"    console.log('   Steps:', status.progress.completed_steps + '/' + status.progress.total_steps);",
+									"    if (status.current_step) {",
+									"        console.log('   Step actual:', status.current_step.name);",
+									"    }",
+									"    console.log('   Completado:', status.progress.is_completed);",
+									"    console.log('   Falló:', status.progress.is_failed);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{discovery_base_url}}/executions/{{execution_id}}/status",
+							"host": ["{{discovery_base_url}}"],
+							"path": ["executions", "{{execution_id}}", "status"]
+						}
+					}
+				},
+				{
+					"name": "📋 Historial de Steps",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{discovery_base_url}}/executions/{{execution_id}}/steps",
+							"host": ["{{discovery_base_url}}"],
+							"path": ["executions", "{{execution_id}}", "steps"]
+						}
+					}
+				},
+				{
+					"name": "🔄 Ejecutar Siguiente Step (Manual)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{discovery_base_url}}/executions/{{execution_id}}/next",
+							"host": ["{{discovery_base_url}}"],
+							"path": ["executions", "{{execution_id}}", "next"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "📨 4. Reportes de Progreso",
+			"item": [
+				{
+					"name": "📈 Reportar Progreso de Step",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"percentage\": 75,\n  \"message\": \"Procesando documento...\",\n  \"current_task\": \"Extrayendo texto de páginas\",\n  \"estimated_remaining_seconds\": 30,\n  \"custom_data\": {\n    \"pages_processed\": 7,\n    \"total_pages\": 10,\n    \"sections_found\": 3\n  }\n}"
+						},
+						"url": {
+							"raw": "{{discovery_base_url}}/executions/{{execution_id}}/steps/fetch_user/progress",
+							"host": ["{{discovery_base_url}}"],
+							"path": ["executions", "{{execution_id}}", "steps", "fetch_user", "progress"]
+						}
+					}
+				},
+				{
+					"name": "✅ Marcar Step Completado",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"success\": true,\n  \"data\": {\n    \"extracted_fields\": 15,\n    \"validation_passed\": true,\n    \"document_type\": \"PDF\",\n    \"pages_processed\": 10\n  },\n  \"message\": \"Documento procesado exitosamente\",\n  \"processing_time_seconds\": 45.2\n}"
+						},
+						"url": {
+							"raw": "{{discovery_base_url}}/executions/{{execution_id}}/steps/fetch_user/complete",
+							"host": ["{{discovery_base_url}}"],
+							"path": ["executions", "{{execution_id}}", "steps", "fetch_user", "complete"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "🔧 5. Gestión de Workflows",
+			"item": [
+				{
+					"name": "📚 Listar Todos los Workflows",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{discovery_base_url}}/workflows",
+							"host": ["{{discovery_base_url}}"],
+							"path": ["workflows"]
+						}
+					}
+				},
+				{
+					"name": "🔍 Obtener Workflow Específico",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{discovery_base_url}}/workflows/{{workflow_id}}",
+							"host": ["{{discovery_base_url}}"],
+							"path": ["workflows", "{{workflow_id}}"]
+						}
+					}
+				},
+				{
+					"name": "📋 Historial de Ejecuciones del Workflow",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{discovery_base_url}}/workflows/{{workflow_id}}/executions",
+							"host": ["{{discovery_base_url}}"],
+							"path": ["workflows", "{{workflow_id}}", "executions"]
+						}
+					}
+				},
+				{
+					"name": "🔧 Steps Disponibles en Pioneer",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{discovery_base_url}}/available-steps",
+							"host": ["{{discovery_base_url}}"],
+							"path": ["available-steps"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Configuración automática de variables si no existen",
+					"if (!pm.environment.get('discovery_base_url')) {",
+					"    pm.environment.set('discovery_base_url', 'http://localhost:8000');",
+					"}",
+					"if (!pm.environment.get('pioneer_base_url')) {",
+					"    pm.environment.set('pioneer_base_url', 'http://localhost:8001');",
+					"}"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Log general para todas las respuestas",
+					"console.log('🔗 Request:', pm.request.url.toString());",
+					"console.log('📊 Status:', pm.response.code, pm.response.status);",
+					"if (pm.response.code >= 400) {",
+					"    console.log('❌ Error:', pm.response.text());",
+					"}"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "discovery_base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "pioneer_base_url", 
+			"value": "http://localhost:8001",
+			"type": "string"
+		},
+		{
+			"key": "workflow_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "execution_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

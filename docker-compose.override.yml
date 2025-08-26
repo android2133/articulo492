@@ -1,0 +1,52 @@
+services:
+  discovery:
+    volumes:
+      - ./discovery/api:/app
+    working_dir: /app
+    command: >
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # pioneer:
+  #   volumes:
+  #     - ./pioneer:/app
+  #   working_dir: /app
+  #   command: >
+  #     uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+  
+  pioneer:
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0 --port 8000 --reload
+    develop:
+      watch:
+        - path: ./pioneer
+          action: sync
+          target: /app
+        - path: ./pioneer/requirements.txt
+          action: rebuild
+
+  # challenger:
+  #   volumes:
+  #     - ./challenger:/app
+  #   working_dir: /app
+  #   command: >
+  #     uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # geminis:
+  #   volumes:
+  #     - ./geminis:/app
+  #   working_dir: /app
+  #   # Si geminis es FastAPI:
+  #   command: >
+  #     uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+  geminis:
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0 --port 8080 --reload
+    develop:
+      watch:
+        - path: ./geminis
+          action: sync
+          target: /app
+        - path: ./geminis/requirements.txt
+          action: rebuild

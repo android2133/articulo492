@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    container_name: discovery_db
+    environment:
+      POSTGRES_DB: discovery
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./db:/docker-entrypoint-initdb.d   # carga schema.sql y seed.sql
+      - discovery_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  pioneer:
+    build: ./pioneer
+    container_name: discovery_pioneer
+    ports:
+      - "8001:8000"  # Exponer en puerto diferente para evitar conflictos
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  api:
+    build: ./api
+    container_name: discovery_api
+    depends_on:
+      - db
+      - pioneer
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/discovery
+      PIONEER_URL: http://pioneer:8000  # URL interna para comunicación entre contenedores
+    ports:
+      - "8000:8000"
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0 --port 8000
+      --reload
+
+volumes:
+  discovery_pgdata:

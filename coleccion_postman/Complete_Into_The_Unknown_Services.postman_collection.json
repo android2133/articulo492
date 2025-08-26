@@ -1,0 +1,1031 @@
+{
+	"info": {
+		"name": "Into The Unknown - Complete Services Collection",
+		"description": "Colección completa de todos los servicios disponibles en el proyecto Into The Unknown",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"version": "1.0.0"
+	},
+	"variable": [
+		{
+			"key": "discovery_base_url",
+			"value": "http://localhost:8000",
+			"description": "URL base para el servicio Discovery API"
+		},
+		{
+			"key": "pioneer_base_url",
+			"value": "http://localhost:8001",
+			"description": "URL base para el servicio Pioneer (Steps Service)"
+		},
+		{
+			"key": "challenger_base_url",
+			"value": "http://localhost:8002",
+			"description": "URL base para el servicio Challenger"
+		},
+		{
+			"key": "geminis_base_url",
+			"value": "http://localhost:8003",
+			"description": "URL base para el servicio Geminis (PDF Annotator)"
+		},
+		{
+			"key": "workflow_id",
+			"value": "",
+			"description": "ID del workflow para usar en las pruebas"
+		},
+		{
+			"key": "step_id",
+			"value": "",
+			"description": "ID del step para usar en las pruebas"
+		},
+		{
+			"key": "execution_id",
+			"value": "",
+			"description": "ID de la ejecución para usar en las pruebas"
+		},
+		{
+			"key": "job_id",
+			"value": "",
+			"description": "ID del job de Geminis para usar en las pruebas"
+		}
+	],
+	"item": [
+		{
+			"name": "Discovery API (Puerto 8000)",
+			"description": "Workflow Engine principal con gestión de workflows, steps y ejecuciones",
+			"item": [
+				{
+					"name": "Workflows",
+					"item": [
+						{
+							"name": "Create Workflow",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"Procesamiento de Usuario\",\n  \"description\": \"Workflow para procesar y validar usuarios\",\n  \"mode\": \"manual\"\n}"
+								},
+								"url": {
+									"raw": "{{discovery_base_url}}/workflows",
+									"host": ["{{discovery_base_url}}"],
+									"path": ["workflows"]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    pm.collectionVariables.set('workflow_id', response.id);",
+											"    console.log('Workflow ID guardado:', response.id);",
+											"}"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "List Workflows",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{discovery_base_url}}/workflows",
+									"host": ["{{discovery_base_url}}"],
+									"path": ["workflows"]
+								}
+							}
+						},
+						{
+							"name": "Get Workflow",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{discovery_base_url}}/workflows/{{workflow_id}}",
+									"host": ["{{discovery_base_url}}"],
+									"path": ["workflows", "{{workflow_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Update Workflow",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"description\": \"Workflow actualizado para procesar usuarios con validación mejorada\"\n}"
+								},
+								"url": {
+									"raw": "{{discovery_base_url}}/workflows/{{workflow_id}}",
+									"host": ["{{discovery_base_url}}"],
+									"path": ["workflows", "{{workflow_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Delete Workflow",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{discovery_base_url}}/workflows/{{workflow_id}}",
+									"host": ["{{discovery_base_url}}"],
+									"path": ["workflows", "{{workflow_id}}"]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Steps",
+					"item": [
+						{
+							"name": "List Available Steps (from Pioneer)",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{discovery_base_url}}/available-steps",
+									"host": ["{{discovery_base_url}}"],
+									"path": ["available-steps"]
+								}
+							}
+						},
+						{
+							"name": "Add Step to Workflow",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"Cargar Usuario\",\n  \"handler\": \"fetch_user\",\n  \"order\": 1,\n  \"max_visits\": 1\n}"
+								},
+								"url": {
+									"raw": "{{discovery_base_url}}/workflows/{{workflow_id}}/steps",
+									"host": ["{{discovery_base_url}}"],
+									"path": ["workflows", "{{workflow_id}}", "steps"]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    pm.collectionVariables.set('step_id', response.id);",
+											"    console.log('Step ID guardado:', response.id);",
+											"}"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "List Workflow Steps",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{discovery_base_url}}/workflows/{{workflow_id}}/steps",
+									"host": ["{{discovery_base_url}}"],
+									"path": ["workflows", "{{workflow_id}}", "steps"]
+								}
+							}
+						},
+						{
+							"name": "Get Step",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{discovery_base_url}}/steps/{{step_id}}",
+									"host": ["{{discovery_base_url}}"],
+									"path": ["steps", "{{step_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Update Step",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"Cargar Usuario - Actualizado\",\n  \"max_visits\": 3\n}"
+								},
+								"url": {
+									"raw": "{{discovery_base_url}}/steps/{{step_id}}",
+									"host": ["{{discovery_base_url}}"],
+									"path": ["steps", "{{step_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Delete Step",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{discovery_base_url}}/steps/{{step_id}}",
+									"host": ["{{discovery_base_url}}"],
+									"path": ["steps", "{{step_id}}"]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Executions",
+					"item": [
+						{
+							"name": "Execute Workflow (RESTful)",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"mode\": \"manual\",\n  \"user_id\": \"123\",\n  \"document_type\": \"passport\",\n  \"priority\": \"high\"\n}"
+								},
+								"url": {
+									"raw": "{{discovery_base_url}}/workflows/{{workflow_id}}/execute",
+									"host": ["{{discovery_base_url}}"],
+									"path": ["workflows", "{{workflow_id}}", "execute"]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    pm.collectionVariables.set('execution_id', response.id);",
+											"    console.log('Execution ID guardado:', response.id);",
+											"}"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "Execute Workflow (Legacy)",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"workflow_id\": \"{{workflow_id}}\",\n  \"mode\": \"automatic\",\n  \"data\": {\n    \"user_id\": \"456\",\n    \"document_type\": \"license\"\n  }\n}"
+								},
+								"url": {
+									"raw": "{{discovery_base_url}}/execute/",
+									"host": ["{{discovery_base_url}}"],
+									"path": ["execute", ""]
+								}
+							}
+						},
+						{
+							"name": "Get Workflow Executions",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{discovery_base_url}}/workflows/{{workflow_id}}/executions",
+									"host": ["{{discovery_base_url}}"],
+									"path": ["workflows", "{{workflow_id}}", "executions"]
+								}
+							}
+						},
+						{
+							"name": "Get Execution Steps",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{discovery_base_url}}/executions/{{execution_id}}/steps",
+									"host": ["{{discovery_base_url}}"],
+									"path": ["executions", "{{execution_id}}", "steps"]
+								}
+							}
+						},
+						{
+							"name": "Execute Next Step (Manual Mode)",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{discovery_base_url}}/executions/{{execution_id}}/next",
+									"host": ["{{discovery_base_url}}"],
+									"path": ["executions", "{{execution_id}}", "next"]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "WebSocket",
+					"item": [
+						{
+							"name": "WebSocket Connection",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "ws://localhost:8000/ws/{{execution_id}}",
+									"protocol": "ws",
+									"host": ["localhost"],
+									"port": "8000",
+									"path": ["ws", "{{execution_id}}"]
+								},
+								"description": "WebSocket endpoint para recibir actualizaciones en tiempo real de la ejecución"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Pioneer API (Puerto 8001)",
+			"description": "Servicio de Steps independiente que ejecuta los handlers de pasos",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{pioneer_base_url}}/",
+							"host": ["{{pioneer_base_url}}"],
+							"path": [""]
+						}
+					}
+				},
+				{
+					"name": "List Available Steps",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{pioneer_base_url}}/steps",
+							"host": ["{{pioneer_base_url}}"],
+							"path": ["steps"]
+						}
+					}
+				},
+				{
+					"name": "Execute Step - Fetch User with Document",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"step\": \"fetch_user\",\n  \"context\": {\n    \"base64\": \"JVBERi0xLjQKJeLjz9MKNCAwIG9iagqACvAqGVfLWo...base64_content_here\",\n    \"mime\": \"application/pdf\",\n    \"nombre_documento\": \"documento_ejemplo.pdf\",\n    \"manual\": false\n  },\n  \"config\": {\n    \"modelo\": \"modelo_por_defecto\",\n    \"timeout\": 60\n  }\n}"
+						},
+						"url": {
+							"raw": "{{pioneer_base_url}}/steps/fetch_user",
+							"host": ["{{pioneer_base_url}}"],
+							"path": ["steps", "fetch_user"]
+						}
+					}
+				},
+				{
+					"name": "Execute Step - Validate User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"step\": \"validate_user\",\n  \"context\": {\n    \"user_data\": {\n      \"name\": \"Juan Pérez\",\n      \"age\": 30,\n      \"email\": \"juan@example.com\"\n    }\n  },\n  \"config\": {}\n}"
+						},
+						"url": {
+							"raw": "{{pioneer_base_url}}/steps/validate_user",
+							"host": ["{{pioneer_base_url}}"],
+							"path": ["steps", "validate_user"]
+						}
+					}
+				},
+				{
+					"name": "Execute Step - Transform Data",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"step\": \"transform_data\",\n  \"context\": {\n    \"raw_data\": {\n      \"user_name\": \"JUAN PEREZ\",\n      \"user_email\": \"JUAN@EXAMPLE.COM\"\n    }\n  },\n  \"config\": {\n    \"format\": \"lowercase\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{pioneer_base_url}}/steps/transform_data",
+							"host": ["{{pioneer_base_url}}"],
+							"path": ["steps", "transform_data"]
+						}
+					}
+				},
+				{
+					"name": "Execute Step - Decide",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"step\": \"decide\",\n  \"context\": {\n    \"user_score\": 85,\n    \"risk_factors\": [\"low_activity\"],\n    \"manual_review_required\": false\n  },\n  \"config\": {\n    \"threshold\": 70\n  }\n}"
+						},
+						"url": {
+							"raw": "{{pioneer_base_url}}/steps/decide",
+							"host": ["{{pioneer_base_url}}"],
+							"path": ["steps", "decide"]
+						}
+					}
+				},
+				{
+					"name": "Execute Step - Approve User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"step\": \"approve_user\",\n  \"context\": {\n    \"user_id\": \"123\",\n    \"decision\": \"approved\",\n    \"score\": 95\n  },\n  \"config\": {}\n}"
+						},
+						"url": {
+							"raw": "{{pioneer_base_url}}/steps/approve_user",
+							"host": ["{{pioneer_base_url}}"],
+							"path": ["steps", "approve_user"]
+						}
+					}
+				},
+				{
+					"name": "Execute Step - Reject User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"step\": \"reject_user\",\n  \"context\": {\n    \"user_id\": \"123\",\n    \"decision\": \"rejected\",\n    \"reason\": \"insufficient_documentation\"\n  },\n  \"config\": {}\n}"
+						},
+						"url": {
+							"raw": "{{pioneer_base_url}}/steps/reject_user",
+							"host": ["{{pioneer_base_url}}"],
+							"path": ["steps", "reject_user"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Challenger API (Puerto 8002)",
+			"description": "Servicio de conversión de documentos con OCR y corrección de orientación",
+			"item": [
+				{
+					"name": "Convert Document (Base64)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"filename\": \"documento.pdf\",\n  \"content_base64\": \"JVBERi0xLjQKJcOkw7zDtsON...\",\n  \"disable_rotation_correction\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{challenger_base_url}}/convert",
+							"host": ["{{challenger_base_url}}"],
+							"path": ["convert"]
+						}
+					}
+				},
+				{
+					"name": "Convert Document (Multipart)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": [],
+									"description": "Archivo PDF o imagen para convertir"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{challenger_base_url}}/convert",
+							"host": ["{{challenger_base_url}}"],
+							"path": ["convert"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Geminis API (Puerto 8003)",
+			"description": "Servicio de procesamiento de PDFs con cola de trabajos y GCP",
+			"item": [
+				{
+					"name": "Queue Management",
+					"item": [
+						{
+							"name": "Enqueue Job",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"filename\": \"documento.pdf\",\n  \"source\": \"gs://mi-bucket/input/documento.pdf\",\n  \"dest\": \"gs://mi-bucket/output/\",\n  \"values\": [\n    \"campo1\",\n    {\n      \"text\": \"campo2\",\n      \"very_permissive\": true,\n      \"marker\": \"Total:\",\n      \"marker_side\": \"right\"\n    }\n  ],\n  \"priority\": 1,\n  \"max_retries\": 3\n}"
+								},
+								"url": {
+									"raw": "{{geminis_base_url}}/enqueue",
+									"host": ["{{geminis_base_url}}"],
+									"path": ["enqueue"]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    pm.collectionVariables.set('job_id', response.job_id);",
+											"    console.log('Job ID guardado:', response.job_id);",
+											"}"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "Get Job Status",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{geminis_base_url}}/jobs/{{job_id}}",
+									"host": ["{{geminis_base_url}}"],
+									"path": ["jobs", "{{job_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Cancel Job",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{geminis_base_url}}/jobs/{{job_id}}",
+									"host": ["{{geminis_base_url}}"],
+									"path": ["jobs", "{{job_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Requeue Job",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{geminis_base_url}}/jobs/{{job_id}}/requeue",
+									"host": ["{{geminis_base_url}}"],
+									"path": ["jobs", "{{job_id}}", "requeue"]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Queue Monitoring",
+					"item": [
+						{
+							"name": "Queue Summary",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{geminis_base_url}}/queue/summary",
+									"host": ["{{geminis_base_url}}"],
+									"path": ["queue", "summary"]
+								}
+							}
+						},
+						{
+							"name": "Queue Pending",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{geminis_base_url}}/queue/pending?limit=50",
+									"host": ["{{geminis_base_url}}"],
+									"path": ["queue", "pending"],
+									"query": [
+										{
+											"key": "limit",
+											"value": "50"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Queue Failed",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{geminis_base_url}}/queue/failed?limit=50",
+									"host": ["{{geminis_base_url}}"],
+									"path": ["queue", "failed"],
+									"query": [
+										{
+											"key": "limit",
+											"value": "50"
+										}
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Health Checks",
+					"item": [
+						{
+							"name": "Health Check",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{geminis_base_url}}/healthz",
+									"host": ["{{geminis_base_url}}"],
+									"path": ["healthz"]
+								}
+							}
+						},
+						{
+							"name": "Readiness Check",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{geminis_base_url}}/readyz",
+									"host": ["{{geminis_base_url}}"],
+									"path": ["readyz"]
+								}
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Complete Workflow Examples",
+			"description": "Ejemplos de flujos completos usando múltiples servicios",
+			"item": [
+				{
+					"name": "Complete User Workflow",
+					"item": [
+						{
+							"name": "1. Create Workflow",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"Complete User Processing\",\n  \"description\": \"Workflow completo para procesar usuarios con validación\",\n  \"mode\": \"manual\"\n}"
+								},
+								"url": {
+									"raw": "{{discovery_base_url}}/workflows",
+									"host": ["{{discovery_base_url}}"],
+									"path": ["workflows"]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    pm.collectionVariables.set('workflow_id', response.id);",
+											"    console.log('Workflow ID guardado:', response.id);",
+											"}"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "2. Add Steps to Workflow",
+							"item": [
+								{
+									"name": "Add Fetch User Step",
+									"request": {
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"value": "application/json"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"name\": \"Cargar Usuario\",\n  \"handler\": \"fetch_user\",\n  \"order\": 1,\n  \"max_visits\": 1\n}"
+										},
+										"url": {
+											"raw": "{{discovery_base_url}}/workflows/{{workflow_id}}/steps",
+											"host": ["{{discovery_base_url}}"],
+											"path": ["workflows", "{{workflow_id}}", "steps"]
+										}
+									}
+								},
+								{
+									"name": "Add Validate User Step",
+									"request": {
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"value": "application/json"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"name\": \"Validar Usuario\",\n  \"handler\": \"validate_user\",\n  \"order\": 2,\n  \"max_visits\": 1\n}"
+										},
+										"url": {
+											"raw": "{{discovery_base_url}}/workflows/{{workflow_id}}/steps",
+											"host": ["{{discovery_base_url}}"],
+											"path": ["workflows", "{{workflow_id}}", "steps"]
+										}
+									}
+								},
+								{
+									"name": "Add Decision Step",
+									"request": {
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"value": "application/json"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"name\": \"Decidir Acción\",\n  \"handler\": \"decide\",\n  \"order\": 3,\n  \"max_visits\": 1\n}"
+										},
+										"url": {
+											"raw": "{{discovery_base_url}}/workflows/{{workflow_id}}/steps",
+											"host": ["{{discovery_base_url}}"],
+											"path": ["workflows", "{{workflow_id}}", "steps"]
+										}
+									}
+								},
+								{
+									"name": "Add Approve User Step",
+									"request": {
+										"method": "POST",
+										"header": [
+											{
+												"key": "Content-Type",
+												"value": "application/json"
+											}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n  \"name\": \"Aprobar Usuario\",\n  \"handler\": \"approve_user\",\n  \"order\": 4,\n  \"max_visits\": 1\n}"
+										},
+										"url": {
+											"raw": "{{discovery_base_url}}/workflows/{{workflow_id}}/steps",
+											"host": ["{{discovery_base_url}}"],
+											"path": ["workflows", "{{workflow_id}}", "steps"]
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "3. Execute Workflow",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"mode\": \"manual\",\n  \"user_id\": \"12345\",\n  \"document_type\": \"passport\",\n  \"risk_level\": \"low\"\n}"
+								},
+								"url": {
+									"raw": "{{discovery_base_url}}/workflows/{{workflow_id}}/execute",
+									"host": ["{{discovery_base_url}}"],
+									"path": ["workflows", "{{workflow_id}}", "execute"]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    pm.collectionVariables.set('execution_id', response.id);",
+											"    console.log('Execution ID guardado:', response.id);",
+											"}"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "4. Execute Next Steps",
+							"item": [
+								{
+									"name": "Execute Step 1",
+									"request": {
+										"method": "POST",
+										"header": [],
+										"url": {
+											"raw": "{{discovery_base_url}}/executions/{{execution_id}}/next",
+											"host": ["{{discovery_base_url}}"],
+											"path": ["executions", "{{execution_id}}", "next"]
+										}
+									}
+								},
+								{
+									"name": "Execute Step 2",
+									"request": {
+										"method": "POST",
+										"header": [],
+										"url": {
+											"raw": "{{discovery_base_url}}/executions/{{execution_id}}/next",
+											"host": ["{{discovery_base_url}}"],
+											"path": ["executions", "{{execution_id}}", "next"]
+										}
+									}
+								},
+								{
+									"name": "Execute Step 3",
+									"request": {
+										"method": "POST",
+										"header": [],
+										"url": {
+											"raw": "{{discovery_base_url}}/executions/{{execution_id}}/next",
+											"host": ["{{discovery_base_url}}"],
+											"path": ["executions", "{{execution_id}}", "next"]
+										}
+									}
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "Document Processing with Geminis",
+					"item": [
+						{
+							"name": "1. Enqueue Document Processing",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"filename\": \"invoice-2024.pdf\",\n  \"source\": \"gs://documents-bucket/input/invoice-2024.pdf\",\n  \"dest\": \"gs://documents-bucket/output/\",\n  \"values\": [\n    \"invoice_number\",\n    \"total_amount\",\n    {\n      \"text\": \"due_date\",\n      \"very_permissive\": false,\n      \"marker\": \"Due Date:\",\n      \"marker_side\": \"right\"\n    }\n  ],\n  \"priority\": 2\n}"
+								},
+								"url": {
+									"raw": "{{geminis_base_url}}/enqueue",
+									"host": ["{{geminis_base_url}}"],
+									"path": ["enqueue"]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    pm.collectionVariables.set('job_id', response.job_id);",
+											"    console.log('Job ID guardado:', response.job_id);",
+											"}"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "2. Monitor Job Progress",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{geminis_base_url}}/jobs/{{job_id}}",
+									"host": ["{{geminis_base_url}}"],
+									"path": ["jobs", "{{job_id}}"]
+								}
+							}
+						},
+						{
+							"name": "3. Check Queue Status",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{geminis_base_url}}/queue/summary",
+									"host": ["{{geminis_base_url}}"],
+									"path": ["queue", "summary"]
+								}
+							}
+						}
+					]
+				}
+			]
+		}
+	]
+}

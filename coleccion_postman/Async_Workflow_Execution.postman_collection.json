@@ -1,0 +1,515 @@
+{
+	"info": {
+		"_postman_id": "async-workflow-collection-2025",
+		"name": "Async Workflow Execution - Discovery API",
+		"description": "Colección para probar el nuevo sistema de ejecución asíncrona de workflows en Discovery.\n\n## Nuevas funcionalidades:\n- ✅ Ejecución asíncrona de workflows\n- ✅ Seguimiento en tiempo real del progreso\n- ✅ APIs para consultar estado\n- ✅ WebSocket para notificaciones\n- ✅ Reportes de progreso desde steps\n\n## Orden de prueba recomendado:\n1. **Listar Workflows** - Ver workflows disponibles\n2. **Ejecutar Workflow Asíncrono** - Iniciar ejecución\n3. **Consultar Estado** - Ver progreso\n4. **WebSocket** - Conectar para tiempo real\n5. **Historial Steps** - Ver detalles de ejecución",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "📋 Gestión de Workflows",
+			"item": [
+				{
+					"name": "Listar Workflows Disponibles",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{discovery_base_url}}/workflows",
+							"host": [
+								"{{discovery_base_url}}"
+							],
+							"path": [
+								"workflows"
+							]
+						},
+						"description": "Lista todos los workflows disponibles en el sistema."
+					},
+					"response": []
+				},
+				{
+					"name": "Obtener Workflow Específico",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{discovery_base_url}}/workflows/{{workflow_id}}",
+							"host": [
+								"{{discovery_base_url}}"
+							],
+							"path": [
+								"workflows",
+								"{{workflow_id}}"
+							]
+						},
+						"description": "Obtiene detalles de un workflow específico incluidos sus steps."
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Steps Disponibles en Pioneer",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{discovery_base_url}}/available-steps",
+							"host": [
+								"{{discovery_base_url}}"
+							],
+							"path": [
+								"available-steps"
+							]
+						},
+						"description": "Lista todos los steps disponibles en el servicio Pioneer."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para gestionar y consultar workflows."
+		},
+		{
+			"name": "🚀 Ejecución Asíncrona",
+			"item": [
+				{
+					"name": "Ejecutar Workflow Asíncrono (RESTful)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Guardar execution_id para uso posterior",
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('execution_id', response.execution_id);",
+									"    pm.environment.set('websocket_url', response.websocket_url);",
+									"    ",
+									"    pm.test('Workflow iniciado exitosamente', () => {",
+									"        pm.expect(response).to.have.property('execution_id');",
+									"        pm.expect(response).to.have.property('tracking_url');",
+									"        pm.expect(response).to.have.property('websocket_url');",
+									"        pm.expect(response.status).to.eql('running');",
+									"    });",
+									"    ",
+									"    console.log('🚀 Workflow iniciado!');",
+									"    console.log('📋 Execution ID:', response.execution_id);",
+									"    console.log('🔗 Tracking URL:', response.tracking_url);",
+									"    console.log('🌐 WebSocket URL:', response.websocket_url);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"base64\": \"{{pdf_base64}}\",\n  \"mime\": \"application/pdf\",\n  \"nombre_documento\": \"documento_prueba_async.pdf\",\n  \"uuid_proceso\": \"proceso_async_{{$timestamp}}\",\n  \"manual\": false\n}"
+						},
+						"url": {
+							"raw": "{{discovery_base_url}}/workflows/{{workflow_id}}/execute-async",
+							"host": [
+								"{{discovery_base_url}}"
+							],
+							"path": [
+								"workflows",
+								"{{workflow_id}}",
+								"execute-async"
+							]
+						},
+						"description": "Ejecuta un workflow de forma asíncrona usando el endpoint RESTful.\n\n**Respuesta inmediata:**\n- `execution_id`: UUID para seguimiento\n- `tracking_url`: URL para consultar estado\n- `websocket_url`: URL para WebSocket en tiempo real\n\n**Variables que se guardan:**\n- `execution_id`: Para usar en otros requests\n- `websocket_url`: Para conectar WebSocket"
+					},
+					"response": []
+				},
+				{
+					"name": "Ejecutar Workflow Asíncrono (Legacy)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Guardar execution_id para uso posterior",
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('execution_id', response.execution_id);",
+									"    pm.environment.set('websocket_url', response.websocket_url);",
+									"    ",
+									"    pm.test('Workflow legacy iniciado exitosamente', () => {",
+									"        pm.expect(response).to.have.property('execution_id');",
+									"        pm.expect(response).to.have.property('tracking_url');",
+									"        pm.expect(response).to.have.property('websocket_url');",
+									"        pm.expect(response.status).to.eql('running');",
+									"    });",
+									"    ",
+									"    console.log('🔄 Workflow legacy iniciado!');",
+									"    console.log('📋 Execution ID:', response.execution_id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"workflow_id\": \"{{workflow_id}}\",\n  \"mode\": \"automatic\",\n  \"data\": {\n    \"base64\": \"{{pdf_base64}}\",\n    \"mime\": \"application/pdf\",\n    \"nombre_documento\": \"documento_legacy_async.pdf\",\n    \"uuid_proceso\": \"proceso_legacy_{{$timestamp}}\",\n    \"manual\": false\n  }\n}"
+						},
+						"url": {
+							"raw": "{{discovery_base_url}}/execute-async/",
+							"host": [
+								"{{discovery_base_url}}"
+							],
+							"path": [
+								"execute-async",
+								""
+							]
+						},
+						"description": "Ejecuta un workflow usando el endpoint legacy de compatibilidad hacia atrás, pero de forma asíncrona.\n\nEste endpoint mantiene el formato original para compatibilidad."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para ejecutar workflows de forma asíncrona."
+		},
+		{
+			"name": "📊 Seguimiento y Estado",
+			"item": [
+				{
+					"name": "Consultar Estado Completo",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const status = pm.response.json();",
+									"    ",
+									"    pm.test('Estado obtenido correctamente', () => {",
+									"        pm.expect(status).to.have.property('execution_id');",
+									"        pm.expect(status).to.have.property('progress');",
+									"        pm.expect(status.progress).to.have.property('percentage');",
+									"    });",
+									"    ",
+									"    // Log del progreso",
+									"    console.log('📊 Estado del Workflow:');",
+									"    console.log('   Status:', status.status);",
+									"    console.log('   Progreso:', status.progress.percentage + '%');",
+									"    console.log('   Steps completados:', status.progress.completed_steps + '/' + status.progress.total_steps);",
+									"    ",
+									"    if (status.current_step) {",
+									"        console.log('   Step actual:', status.current_step.name);",
+									"    }",
+									"    ",
+									"    console.log('   Ejecutándose:', status.progress.is_running);",
+									"    console.log('   Completado:', status.progress.is_completed);",
+									"    console.log('   Falló:', status.progress.is_failed);",
+									"    ",
+									"    // Auto-verificar progreso si aún está ejecutándose",
+									"    if (status.progress.is_running && !status.progress.is_completed) {",
+									"        console.log('⏳ Workflow aún ejecutándose... Puedes volver a ejecutar este request para ver progreso.');",
+									"    }",
+									"    ",
+									"    if (status.progress.is_completed) {",
+									"        console.log('🎉 Workflow COMPLETADO!');",
+									"    }",
+									"    ",
+									"    if (status.progress.is_failed) {",
+									"        console.log('❌ Workflow FALLÓ');",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{discovery_base_url}}/executions/{{execution_id}}/status",
+							"host": [
+								"{{discovery_base_url}}"
+							],
+							"path": [
+								"executions",
+								"{{execution_id}}",
+								"status"
+							]
+						},
+						"description": "Obtiene el estado completo de una ejecución incluyendo:\n\n- **Estado general**: running, completed, failed\n- **Progreso**: porcentaje y steps completados\n- **Step actual**: qué step está ejecutándose\n- **Historial**: todos los steps ejecutados\n- **Contexto**: datos del workflow\n- **URLs**: para seguimiento adicional\n\n**Usar para:**\n- Polling del progreso\n- Verificar si terminó\n- Ver detalles completos"
+					},
+					"response": []
+				},
+				{
+					"name": "Historial de Steps Ejecutados",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const steps = pm.response.json();",
+									"    ",
+									"    pm.test('Historial obtenido correctamente', () => {",
+									"        pm.expect(steps).to.be.an('array');",
+									"    });",
+									"    ",
+									"    console.log('📋 Historial de Steps:');",
+									"    steps.forEach((step, index) => {",
+									"        console.log(`   ${index + 1}. ${step.step_name || 'Unknown'} - ${step.status}`);",
+									"        if (step.started_at) {",
+									"            console.log(`      Iniciado: ${step.started_at}`);",
+									"        }",
+									"        if (step.finished_at) {",
+									"            console.log(`      Terminado: ${step.finished_at}`);",
+									"        }",
+									"        if (step.attempt > 1) {",
+									"            console.log(`      Intento: ${step.attempt}`);",
+									"        }",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{discovery_base_url}}/executions/{{execution_id}}/steps",
+							"host": [
+								"{{discovery_base_url}}"
+							],
+							"path": [
+								"executions",
+								"{{execution_id}}",
+								"steps"
+							]
+						},
+						"description": "Obtiene el historial detallado de todos los steps ejecutados en esta ejecución específica.\n\n**Incluye:**\n- Estado de cada step\n- Tiempos de inicio y fin\n- Número de intento\n- Payload de entrada y salida\n- Duración de ejecución"
+					},
+					"response": []
+				},
+				{
+					"name": "Historial de Ejecuciones del Workflow",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{discovery_base_url}}/workflows/{{workflow_id}}/executions",
+							"host": [
+								"{{discovery_base_url}}"
+							],
+							"path": [
+								"workflows",
+								"{{workflow_id}}",
+								"executions"
+							]
+						},
+						"description": "Obtiene el historial de todas las ejecuciones de un workflow específico.\n\nÚtil para ver:\n- Ejecuciones previas\n- Patrones de éxito/fallo\n- Comparar diferentes ejecuciones"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para consultar el estado y progreso de ejecuciones."
+		},
+		{
+			"name": "📈 Reportes de Progreso",
+			"item": [
+				{
+					"name": "Marcar Progreso de Step",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"percentage\": 50,\n  \"message\": \"Procesando documento...\",\n  \"current_task\": \"Extrayendo texto del PDF\",\n  \"estimated_remaining_seconds\": 120,\n  \"custom_data\": {\n    \"pages_processed\": 5,\n    \"total_pages\": 10,\n    \"sections_found\": 3\n  }\n}"
+						},
+						"url": {
+							"raw": "{{discovery_base_url}}/executions/{{execution_id}}/steps/fetch_user/progress",
+							"host": [
+								"{{discovery_base_url}}"
+							],
+							"path": [
+								"executions",
+								"{{execution_id}}",
+								"steps",
+								"fetch_user",
+								"progress"
+							]
+						},
+						"description": "Permite a los steps reportar su progreso durante la ejecución.\n\n**Los steps pueden llamar este endpoint para:**\n- Actualizar porcentaje de progreso\n- Mostrar mensaje de estado actual\n- Informar tarea específica\n- Estimar tiempo restante\n- Enviar datos personalizados\n\n**Nota:** Este endpoint normalmente es llamado desde Pioneer, no manualmente."
+					},
+					"response": []
+				},
+				{
+					"name": "Marcar Step como Completado",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"success\": true,\n  \"data\": {\n    \"extracted_fields\": 15,\n    \"validation_passed\": true,\n    \"pdf_uploaded\": true,\n    \"sections_found\": 8\n  },\n  \"message\": \"Documento procesado exitosamente\",\n  \"processing_time_seconds\": 45.2\n}"
+						},
+						"url": {
+							"raw": "{{discovery_base_url}}/executions/{{execution_id}}/steps/fetch_user/complete",
+							"host": [
+								"{{discovery_base_url}}"
+							],
+							"path": [
+								"executions",
+								"{{execution_id}}",
+								"steps",
+								"fetch_user",
+								"complete"
+							]
+						},
+						"description": "Marca un step como completado con datos del resultado.\n\n**Los steps pueden usar esto para:**\n- Confirmar finalización exitosa\n- Reportar datos finales\n- Enviar métricas de rendimiento\n- Notificar resultado\n\n**Nota:** Este endpoint normalmente es llamado desde Pioneer, no manualmente."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints que los steps usan para reportar progreso (normalmente llamados desde Pioneer)."
+		},
+		{
+			"name": "🔄 Ejecución Síncrona (Original)",
+			"item": [
+				{
+					"name": "Ejecutar Workflow Síncrono (RESTful)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"base64\": \"{{pdf_base64}}\",\n  \"mime\": \"application/pdf\",\n  \"nombre_documento\": \"documento_sincrono.pdf\",\n  \"uuid_proceso\": \"proceso_sync_{{$timestamp}}\",\n  \"manual\": false\n}"
+						},
+						"url": {
+							"raw": "{{discovery_base_url}}/workflows/{{workflow_id}}/execute",
+							"host": [
+								"{{discovery_base_url}}"
+							],
+							"path": [
+								"workflows",
+								"{{workflow_id}}",
+								"execute"
+							]
+						},
+						"description": "Ejecuta un workflow de forma síncrona (modo original).\n\n**Comportamiento:**\n- Espera hasta que el workflow termine completamente\n- Devuelve el resultado final\n- Puede causar timeout en workflows largos\n\n**Usar para:**\n- Workflows cortos (< 30 segundos)\n- Cuando necesites el resultado inmediato\n- Testing rápido"
+					},
+					"response": []
+				},
+				{
+					"name": "Ejecutar Workflow Síncrono (Legacy)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"workflow_id\": \"{{workflow_id}}\",\n  \"mode\": \"automatic\",\n  \"data\": {\n    \"base64\": \"{{pdf_base64}}\",\n    \"mime\": \"application/pdf\",\n    \"nombre_documento\": \"documento_legacy_sync.pdf\",\n    \"uuid_proceso\": \"proceso_legacy_sync_{{$timestamp}}\",\n    \"manual\": false\n  }\n}"
+						},
+						"url": {
+							"raw": "{{discovery_base_url}}/execute/",
+							"host": [
+								"{{discovery_base_url}}"
+							],
+							"path": [
+								"execute",
+								""
+							]
+						},
+						"description": "Ejecuta un workflow usando el endpoint legacy original.\n\nEste es el endpoint que usabas antes. Funciona igual pero ahora tienes la opción asíncrona."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints originales para ejecución síncrona (para comparación)."
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Auto-configurar variables si no existen",
+					"if (!pm.environment.get('discovery_base_url')) {",
+					"    pm.environment.set('discovery_base_url', 'http://localhost:8000');",
+					"}",
+					"",
+					"// Ejemplo de PDF base64 pequeño (solo si no está configurado)",
+					"if (!pm.environment.get('pdf_base64')) {",
+					"    // Este es un PDF mínimo válido - reemplaza con tu archivo real",
+					"    pm.environment.set('pdf_base64', 'JVBERi0xLjQKJcOkw7zDtsOt');",
+					"    console.log('⚠️ Usando PDF base64 de ejemplo. Configura la variable pdf_base64 con tu archivo real.');",
+					"}",
+					"",
+					"// Configurar workflow_id por defecto si no existe",
+					"if (!pm.environment.get('workflow_id')) {",
+					"    console.log('⚠️ Variable workflow_id no configurada. Usa \"Listar Workflows\" para obtener un ID válido.');",
+					"}"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "discovery_base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "workflow_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "execution_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "websocket_url",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "pdf_base64",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

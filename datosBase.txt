@@ -1,0 +1,21 @@
+# Usando psql (si lo tienes instalado)
+psql -h localhost -p 5432 -U postgres -d discovery
+
+# Usando pgAdmin o cualquier cliente GUI con estos datos:
+# Host: localhost
+# Puerto: 5432
+# Usuario: postgres
+# Contraseña: postgres
+# Base de datos: discovery
+
+
+
+
+Las credenciales son:
+
+Host: localhost (desde tu máquina) o db (desde otros contenedores)
+Puerto: 5432
+Usuario: postgres
+Contraseña: postgres
+Base de datos: discovery
+¿Quieres que agregue un servicio de pgAdmin al docker-compose para facilitar la administración de la base de datos?
