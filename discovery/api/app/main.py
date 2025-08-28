@@ -29,6 +29,17 @@ async def get_db():
     async with SessionLocal() as s:
         yield s
 
+# ---------- Health Check ----------
+@app.get("/")
+async def root():
+    """Simple health check endpoint."""
+    return {"status": "healthy", "service": "discovery-api"}
+
+@app.get("/health")
+async def health():
+    """Health check endpoint."""
+    return {"status": "healthy", "service": "discovery-api"}
+
 # ---------- CRUD Workflows ----------
 @app.post("/workflows", response_model=schemas.Workflow)
 async def create_workflow(wf: schemas.WorkflowCreate, db: AsyncSession = Depends(get_db)):
@@ -199,8 +210,8 @@ async def execute_workflow_legacy_async(body: schemas.ExecutionCreate, db: Async
     """
     wf = await crud.get_workflow(db, body.workflow_id)
     if not wf:
-        raise HTTPException(404, "Workflow no encontrado")
-    
+        raise HTTPException(404, f"Workflow no encontrado: {body.workflow_id}")
+
     # Crear la ejecución
     exec_obj = await workflow_engine.start_execution(db, wf, body.mode or wf.mode, initial_data=body.data)
     

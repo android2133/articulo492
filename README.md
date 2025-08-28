@@ -8,21 +8,24 @@ docker compose down
 
 
 
-docker compose watch pioneer geminis db 
+docker compose watch pioneer geminis atlantis db 
 
 
 docker compose logs -f pioneer  # edita un .py y debe decir "Detected change"
 
 docker compose logs -f geminis
 
+docker compose logs -f atlantis
+
 
 # Into the Unknown - Docker Compose Setup
 
-Este proyecto contiene 3 servicios principales que trabajan juntos:
+Este proyecto contiene 4 servicios principales que trabajan juntos:
 
 - **Discovery**: Motor de workflow y API principal
 - **Pioneer**: Servicio de steps realistas
-- **Challenger**: Servicio de procesamiento avanzado
+- **Geminis**: Servicio de procesamiento de PDFs
+- **Atlantis**: Servicio de gestión de bandejas y registros
 
 Todos los servicios comparten la misma base de datos PostgreSQL.
 
@@ -30,7 +33,9 @@ Todos los servicios comparten la misma base de datos PostgreSQL.
 
 - **Discovery API**: http://localhost:8000
 - **Pioneer Service**: http://localhost:8001
-- **Challenger Service**: http://localhost:8002
+- **Challenger Service**: http://localhost:8002 (comentado)
+- **Geminis Service**: http://localhost:8003
+- **Atlantis Service**: http://localhost:8004
 - **PostgreSQL Database**: localhost:5432
 
 ## Comandos Principales
@@ -49,7 +54,8 @@ docker-compose logs -f
 ```bash
 docker-compose logs -f discovery
 docker-compose logs -f pioneer
-docker-compose logs -f challenger
+docker-compose logs -f geminis
+docker-compose logs -f atlantis
 ```
 
 ### Parar todos los servicios
@@ -108,7 +114,8 @@ La base de datos se inicializa automáticamente con los archivos SQL en `discove
 
 Los servicios se comunican entre sí usando sus nombres de contenedor:
 - Discovery puede llamar a Pioneer en `http://pioneer:8000`
-- Discovery puede llamar a Challenger en `http://challenger:8000`
+- Discovery puede llamar a Geminis en `http://geminis:8080`
+- Discovery puede llamar a Atlantis en `http://atlantis:8000`
 - Todos pueden acceder a la base de datos en `db:5432`
 
 ## Troubleshooting

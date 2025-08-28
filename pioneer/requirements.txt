@@ -47,3 +47,21 @@ webdriver-manager==4.0.1
 wsproto==1.2.0
 
 #termina para valida ine
+
+
+#para hacer la busqueda en internet
+# Core LlamaIndex
+llama-index>=0.11.0
+openai
+llama-index-llms-openai
+
+# Herramientas de búsqueda
+llama-index-tools-duckduckgo
+llama-index-tools-tavily-research
+tavily-python
+
+# HTTP y scraping
+httpx
+beautifulsoup4
+
+#termina para hacer la busqueda

@@ -4,6 +4,7 @@ from .utils.separaPDF import reorder_pdf_sections
 from .utils.carga_archivos_bucket import GCSFileManager
 from .utils.geminis_client import process_pdf_with_geminis, check_geminis_health
 from .utils.valida_ine import validar_ine_con_modelo_identificado
+from .utils.busquedaInternet import screen_person
 from .step_registry import register
 import asyncio
 import time
@@ -540,6 +541,102 @@ async def transform_data(context: dict, config: dict) -> dict:
     # Obtener execution_id para reportar progreso
     execution_id = context.get("execution_id") or context.get("dynamic_properties", {}).get("execution_id")
     
+    data = context.get("dynamic_properties", {})
+    # print(data)
+    
+    documents = data["resultado_llm_extraccion_data"]["documents"]
+
+    # Buscar el documento deseado
+    valor = None
+    for doc in documents:
+        if doc["name"] == "Formato conoce a tu cliente PERSONA MORAL MEXICANA":
+            valor = doc["fields"].get("NOMBRE_DEL_ADMINISTRADOR_UNICO_O_DIRECTOR_GENERAL_APODERADO_QUIEN_DEBERA_FIRMAR_EL_FORMATO")
+            break
+
+    # print(valor)
+    # Separar por la coma
+    partes = valor.split(",")
+
+    # Limpiar y convertir a minúsculas
+    apellidos = partes[0].strip().lower()
+    nombres = partes[1].strip().lower()
+
+    print("apellidos =", apellidos)
+    print("nombres =", nombres)
+    
+    # Ejecutar búsqueda de antecedentes
+    redesSociales = await screen_person(valor, location="México", topk=5)
+    
+    
+            # Consultar listas negras con el apellido extraído del modelo de INE (independiente de la validación de INE)
+    try:
+        # apellido = resultado_llm.get("resultado", {}).get("apellido", "")
+        # apellido = "Guzman"
+        # apellido = "Joaquin Archivaldo"
+        # apellido = "Guzman Loera"
+        apellido = apellidos
+            
+        if apellido:
+            print(f"[transform_data] Consultando listas negras para apellido: {apellido}")
+                
+            # if execution_id:
+            #     await report_progress(execution_id, "transform_data", {
+            #         "percentage": 75,
+            #         "message": "Consultando listas negras",
+            #         "current_task": f"Verificando apellido {apellido}"
+            #     })
+                
+            try:
+                async with httpx.AsyncClient(timeout=30) as client:
+                    response = await client.post(
+                        "https://valuacion.aseguradoradigital.com.mx/api/services/app/Consultas/BuscarEnListasNegras",
+                        json={"nombre": f"%{apellido}%"},
+                        headers={"Content-Type": "application/json"}
+                    )
+                        
+                    if response.status_code == 200:
+                        resultado_listas_negras = response.json()
+                        print(f"[transform_data] Resultado listas negras: {resultado_listas_negras}")
+                    else:
+                        print(f"[transform_data] Error en consulta listas negras - Status: {response.status_code}")
+                        resultado_listas_negras = {
+                            "error": f"Error HTTP {response.status_code}",
+                            "status_code": response.status_code
+                        }
+                            
+            except httpx.TimeoutException:
+                print(f"[transform_data] Timeout en consulta listas negras")
+                resultado_listas_negras = {"error": "Timeout en consulta listas negras"}
+            except Exception as lista_error:
+                print(f"[transform_data] Error consultando listas negras: {str(lista_error)}")
+                resultado_listas_negras = {"error": f"Error consultando listas negras: {str(lista_error)}"}
+        else:
+            print(f"[transform_data] No se pudo extraer apellido para consulta listas negras")
+            resultado_listas_negras = {"error": "No se pudo extraer apellido del modelo de INE"}
+                
+    except Exception as listas_negras_error:
+        print(f"[transform_data] Error general en consulta listas negras: {str(listas_negras_error)}")
+        resultado_listas_negras = {"error": f"Error general en consulta listas negras: {str(listas_negras_error)}"}
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     if execution_id:
         await report_progress(execution_id, "transform_data", {
             "percentage": 10,
@@ -620,50 +717,50 @@ async def transform_data(context: dict, config: dict) -> dict:
             }
         
         # Consultar listas negras con el apellido extraído del modelo de INE (independiente de la validación de INE)
-        try:
-            apellido = resultado_llm.get("resultado", {}).get("apellido", "")
+        # try:
+        #     apellido = resultado_llm.get("resultado", {}).get("apellido", "")
             
-            if apellido:
-                print(f"[transform_data] Consultando listas negras para apellido: {apellido}")
+        #     if apellido:
+        #         print(f"[transform_data] Consultando listas negras para apellido: {apellido}")
                 
-                if execution_id:
-                    await report_progress(execution_id, "transform_data", {
-                        "percentage": 75,
-                        "message": "Consultando listas negras",
-                        "current_task": f"Verificando apellido {apellido}"
-                    })
+        #         if execution_id:
+        #             await report_progress(execution_id, "transform_data", {
+        #                 "percentage": 75,
+        #                 "message": "Consultando listas negras",
+        #                 "current_task": f"Verificando apellido {apellido}"
+        #             })
                 
-                try:
-                    async with httpx.AsyncClient(timeout=30) as client:
-                        response = await client.post(
-                            "https://valuacion.aseguradoradigital.com.mx/api/services/app/Consultas/BuscarEnListasNegras",
-                            json={"nombre": f"%{apellido}%"},
-                            headers={"Content-Type": "application/json"}
-                        )
+        #         try:
+        #             async with httpx.AsyncClient(timeout=30) as client:
+        #                 response = await client.post(
+        #                     "https://valuacion.aseguradoradigital.com.mx/api/services/app/Consultas/BuscarEnListasNegras",
+        #                     json={"nombre": f"%{apellido}%"},
+        #                     headers={"Content-Type": "application/json"}
+        #                 )
                         
-                        if response.status_code == 200:
-                            resultado_listas_negras = response.json()
-                            print(f"[transform_data] Resultado listas negras: {resultado_listas_negras}")
-                        else:
-                            print(f"[transform_data] Error en consulta listas negras - Status: {response.status_code}")
-                            resultado_listas_negras = {
-                                "error": f"Error HTTP {response.status_code}",
-                                "status_code": response.status_code
-                            }
+        #                 if response.status_code == 200:
+        #                     resultado_listas_negras = response.json()
+        #                     print(f"[transform_data] Resultado listas negras: {resultado_listas_negras}")
+        #                 else:
+        #                     print(f"[transform_data] Error en consulta listas negras - Status: {response.status_code}")
+        #                     resultado_listas_negras = {
+        #                         "error": f"Error HTTP {response.status_code}",
+        #                         "status_code": response.status_code
+        #                     }
                             
-                except httpx.TimeoutException:
-                    print(f"[transform_data] Timeout en consulta listas negras")
-                    resultado_listas_negras = {"error": "Timeout en consulta listas negras"}
-                except Exception as lista_error:
-                    print(f"[transform_data] Error consultando listas negras: {str(lista_error)}")
-                    resultado_listas_negras = {"error": f"Error consultando listas negras: {str(lista_error)}"}
-            else:
-                print(f"[transform_data] No se pudo extraer apellido para consulta listas negras")
-                resultado_listas_negras = {"error": "No se pudo extraer apellido del modelo de INE"}
+        #         except httpx.TimeoutException:
+        #             print(f"[transform_data] Timeout en consulta listas negras")
+        #             resultado_listas_negras = {"error": "Timeout en consulta listas negras"}
+        #         except Exception as lista_error:
+        #             print(f"[transform_data] Error consultando listas negras: {str(lista_error)}")
+        #             resultado_listas_negras = {"error": f"Error consultando listas negras: {str(lista_error)}"}
+        #     else:
+        #         print(f"[transform_data] No se pudo extraer apellido para consulta listas negras")
+        #         resultado_listas_negras = {"error": "No se pudo extraer apellido del modelo de INE"}
                 
-        except Exception as listas_negras_error:
-            print(f"[transform_data] Error general en consulta listas negras: {str(listas_negras_error)}")
-            resultado_listas_negras = {"error": f"Error general en consulta listas negras: {str(listas_negras_error)}"}
+        # except Exception as listas_negras_error:
+        #     print(f"[transform_data] Error general en consulta listas negras: {str(listas_negras_error)}")
+        #     resultado_listas_negras = {"error": f"Error general en consulta listas negras: {str(listas_negras_error)}"}
 
     except Exception as e:
         print(f"[transform_data] Error procesando documento: {e}")
@@ -693,6 +790,7 @@ async def transform_data(context: dict, config: dict) -> dict:
         "resultado_llm_modelo_ine": resultado_llm.get("resultado"),
         "resultado_validacion_ine": resultado_validacion_ine,
         "resultado_listas_negras": resultado_listas_negras,
+        "redesSociales": json.loads(redesSociales),
         # Agregar información de evidencia de INE si está disponible
         "evidencia_ine_disponible": resultado_validacion_ine.get("evidencia_ine", {}).get("gcs_uri") is not None if "evidencia_ine" in resultado_validacion_ine else False,
         "evidencia_ine_gcs_uri": resultado_validacion_ine.get("evidencia_ine", {}).get("gcs_uri", "") if "evidencia_ine" in resultado_validacion_ine else "",
@@ -963,8 +1061,95 @@ async def reject_user(context: dict, config: dict) -> dict:
     """
     Marca el rechazo.
     """
-    user = context.get("user", {})
+    
+    data = context.get("dynamic_properties", {})
+    # print(data)
+    
+    documents = data["resultado_llm_extraccion_data"]["documents"]
+
+    # # Buscar el documento deseado
+    # valor = None
+    # for doc in documents:
+    #     if doc["name"] == "Formato conoce a tu cliente PERSONA MORAL MEXICANA":
+    #         valor = doc["fields"].get("NOMBRE_DEL_ADMINISTRADOR_UNICO_O_DIRECTOR_GENERAL_APODERADO_QUIEN_DEBERA_FIRMAR_EL_FORMATO")
+    #         break
+
+    # # print(valor)
+    # # Separar por la coma
+    # partes = valor.split(",")
+
+    # # Limpiar y convertir a minúsculas
+    # apellidos = partes[0].strip().lower()
+    # nombres = partes[1].strip().lower()
+
+    # print("apellidos =", apellidos)
+    # print("nombres =", nombres)
+    
+    # # Ejecutar búsqueda de antecedentes
+    # redesSociales = await screen_person("Joaquín Archivaldo Guzmán Loera", location="México", topk=5)
+    
+    
+    #         # Consultar listas negras con el apellido extraído del modelo de INE (independiente de la validación de INE)
+    # try:
+    #     # apellido = resultado_llm.get("resultado", {}).get("apellido", "")
+    #     # apellido = "Guzman"
+    #     # apellido = "Joaquin Archivaldo"
+    #     # apellido = "Guzman Loera"
+    #     apellido = "Guevara Espindola"
+            
+    #     if apellido:
+    #         print(f"[transform_data] Consultando listas negras para apellido: {apellido}")
+                
+    #         # if execution_id:
+    #         #     await report_progress(execution_id, "transform_data", {
+    #         #         "percentage": 75,
+    #         #         "message": "Consultando listas negras",
+    #         #         "current_task": f"Verificando apellido {apellido}"
+    #         #     })
+                
+    #         try:
+    #             async with httpx.AsyncClient(timeout=30) as client:
+    #                 response = await client.post(
+    #                     "https://valuacion.aseguradoradigital.com.mx/api/services/app/Consultas/BuscarEnListasNegras",
+    #                     json={"nombre": f"%{apellido}%"},
+    #                     headers={"Content-Type": "application/json"}
+    #                 )
+                        
+    #                 if response.status_code == 200:
+    #                     resultado_listas_negras = response.json()
+    #                     print(f"[transform_data] Resultado listas negras: {resultado_listas_negras}")
+    #                 else:
+    #                     print(f"[transform_data] Error en consulta listas negras - Status: {response.status_code}")
+    #                     resultado_listas_negras = {
+    #                         "error": f"Error HTTP {response.status_code}",
+    #                         "status_code": response.status_code
+    #                     }
+                            
+    #         except httpx.TimeoutException:
+    #             print(f"[transform_data] Timeout en consulta listas negras")
+    #             resultado_listas_negras = {"error": "Timeout en consulta listas negras"}
+    #         except Exception as lista_error:
+    #             print(f"[transform_data] Error consultando listas negras: {str(lista_error)}")
+    #             resultado_listas_negras = {"error": f"Error consultando listas negras: {str(lista_error)}"}
+    #     else:
+    #         print(f"[transform_data] No se pudo extraer apellido para consulta listas negras")
+    #         resultado_listas_negras = {"error": "No se pudo extraer apellido del modelo de INE"}
+                
+    # except Exception as listas_negras_error:
+    #     print(f"[transform_data] Error general en consulta listas negras: {str(listas_negras_error)}")
+    #     resultado_listas_negras = {"error": f"Error general en consulta listas negras: {str(listas_negras_error)}"}
+    
+    
+    
+    
+    
+    
+    
+    # user = context.get("user", {})
     validation_reason = context.get("validation_reason", "Unknown reason")
     return {
-        "context": context
+        "context": context,
+        # "resultado_listas_negras": resultado_listas_negras,
+        # "redesSociales":  json.loads(redesSociales)
+
     }

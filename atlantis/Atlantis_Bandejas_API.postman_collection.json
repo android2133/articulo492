@@ -1,0 +1,1135 @@
+{
+	"info": {
+		"_postman_id": "atlantis-bandejas-api",
+		"name": "🏛️ Atlantis - Bandejas Service API",
+		"description": "Colección completa para el microservicio Atlantis de gestión de bandejas y procesos.\n\n## 🎯 Funcionalidades\n- Gestión de bandejas\n- Campos dinámicos por bandeja\n- Registros/procesos con datos flexibles\n- Sistema de estatus\n- Movimientos entre bandejas\n- Búsqueda avanzada\n\n## 🚀 Variables de Entorno\n- `atlantis_base_url`: http://localhost:8000\n- `atlantis_api_path`: /api/v1\n\n## 📖 Documentación\nVer Swagger UI en: {{atlantis_base_url}}/docs",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "🏥 Health Checks",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}/health",
+							"host": [
+								"{{atlantis_base_url}}"
+							],
+							"path": [
+								"health"
+							]
+						},
+						"description": "Verificar el estado de salud del microservicio"
+					},
+					"response": []
+				},
+				{
+					"name": "Health Check (Kubernetes style)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}/healthz",
+							"host": [
+								"{{atlantis_base_url}}"
+							],
+							"path": [
+								"healthz"
+							]
+						},
+						"description": "Verificar el estado de salud estilo Kubernetes"
+					},
+					"response": []
+				},
+				{
+					"name": "Root Endpoint",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}/",
+							"host": [
+								"{{atlantis_base_url}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Endpoint raíz del microservicio"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para verificar el estado del microservicio"
+		},
+		{
+			"name": "🗂️ Gestión de Bandejas",
+			"item": [
+				{
+					"name": "Crear Bandeja",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200 || pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    if (response.id) {",
+									"        pm.environment.set('bandeja_id', response.id);",
+									"        console.log('Bandeja ID guardado:', response.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Solicitudes Nuevas\",\n  \"descripcion\": \"Bandeja para solicitudes recién ingresadas\",\n  \"grupo\": \"Ingresos\",\n  \"orden\": 1,\n  \"color\": \"#3498db\",\n  \"activa\": true\n}"
+						},
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/bandejas",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"bandejas"
+							]
+						},
+						"description": "Crear una nueva bandeja"
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Bandejas",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/bandejas",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"bandejas"
+							]
+						},
+						"description": "Obtener todas las bandejas ordenadas por grupo, orden y nombre"
+					},
+					"response": []
+				},
+				{
+					"name": "Obtener Bandeja por ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/bandejas/{{bandeja_id}}",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"bandejas",
+								"{{bandeja_id}}"
+							]
+						},
+						"description": "Obtener información detallada de una bandeja específica"
+					},
+					"response": []
+				},
+				{
+					"name": "Actualizar Bandeja",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Solicitudes en Proceso\",\n  \"descripcion\": \"Bandeja para solicitudes que están siendo procesadas\",\n  \"color\": \"#f39c12\"\n}"
+						},
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/bandejas/{{bandeja_id}}",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"bandejas",
+								"{{bandeja_id}}"
+							]
+						},
+						"description": "Actualizar información de una bandeja existente"
+					},
+					"response": []
+				},
+				{
+					"name": "Eliminar Bandeja",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/bandejas/{{bandeja_id}}",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"bandejas",
+								"{{bandeja_id}}"
+							]
+						},
+						"description": "Eliminar una bandeja (solo si está vacía)"
+					},
+					"response": []
+				}
+			],
+			"description": "Operaciones CRUD para bandejas"
+		},
+		{
+			"name": "🏷️ Campos de Bandejas",
+			"item": [
+				{
+					"name": "Crear Campo",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200 || pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    if (response.id) {",
+									"        pm.environment.set('campo_id', response.id);",
+									"        console.log('Campo ID guardado:', response.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"nombre_solicitante\",\n  \"etiqueta\": \"Nombre del Solicitante\",\n  \"tipo\": \"string\",\n  \"requerido\": true,\n  \"mostrar_en_tabla\": true,\n  \"posicion\": 1,\n  \"valor_default\": \"\"\n}"
+						},
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/bandejas/{{bandeja_id}}/campos",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"bandejas",
+								"{{bandeja_id}}",
+								"campos"
+							]
+						},
+						"description": "Crear un nuevo campo para una bandeja"
+					},
+					"response": []
+				},
+				{
+					"name": "Crear Campo - Email",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"email\",\n  \"etiqueta\": \"Correo Electrónico\",\n  \"tipo\": \"email\",\n  \"requerido\": true,\n  \"mostrar_en_tabla\": true,\n  \"posicion\": 2\n}"
+						},
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/bandejas/{{bandeja_id}}/campos",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"bandejas",
+								"{{bandeja_id}}",
+								"campos"
+							]
+						},
+						"description": "Crear campo de tipo email"
+					},
+					"response": []
+				},
+				{
+					"name": "Crear Campo - Enum",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"prioridad\",\n  \"etiqueta\": \"Prioridad\",\n  \"tipo\": \"enum\",\n  \"requerido\": true,\n  \"mostrar_en_tabla\": true,\n  \"posicion\": 3,\n  \"opciones_enum\": [\"Alta\", \"Media\", \"Baja\"],\n  \"valor_default\": \"Media\"\n}"
+						},
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/bandejas/{{bandeja_id}}/campos",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"bandejas",
+								"{{bandeja_id}}",
+								"campos"
+							]
+						},
+						"description": "Crear campo de tipo enum con opciones"
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Campos de Bandeja",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/bandejas/{{bandeja_id}}/campos",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"bandejas",
+								"{{bandeja_id}}",
+								"campos"
+							]
+						},
+						"description": "Obtener todos los campos de una bandeja"
+					},
+					"response": []
+				},
+				{
+					"name": "Obtener Campo por ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/bandejas/{{bandeja_id}}/campos/{{campo_id}}",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"bandejas",
+								"{{bandeja_id}}",
+								"campos",
+								"{{campo_id}}"
+							]
+						},
+						"description": "Obtener información de un campo específico"
+					},
+					"response": []
+				},
+				{
+					"name": "Actualizar Campo",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"etiqueta\": \"Nombre Completo del Solicitante\",\n  \"requerido\": false\n}"
+						},
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/bandejas/{{bandeja_id}}/campos/{{campo_id}}",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"bandejas",
+								"{{bandeja_id}}",
+								"campos",
+								"{{campo_id}}"
+							]
+						},
+						"description": "Actualizar propiedades de un campo"
+					},
+					"response": []
+				},
+				{
+					"name": "Eliminar Campo",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/bandejas/{{bandeja_id}}/campos/{{campo_id}}",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"bandejas",
+								"{{bandeja_id}}",
+								"campos",
+								"{{campo_id}}"
+							]
+						},
+						"description": "Eliminar un campo de una bandeja"
+					},
+					"response": []
+				},
+				{
+					"name": "Obtener Schema de Tabla",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/bandejas/{{bandeja_id}}/campos/tabla/schema",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"bandejas",
+								"{{bandeja_id}}",
+								"campos",
+								"tabla",
+								"schema"
+							]
+						},
+						"description": "Obtener el schema de la tabla para renderizado dinámico"
+					},
+					"response": []
+				}
+			],
+			"description": "Gestión de campos dinámicos por bandeja"
+		},
+		{
+			"name": "📋 Estatus",
+			"item": [
+				{
+					"name": "Crear Estatus",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200 || pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    if (response.id) {",
+									"        pm.environment.set('estatus_id', response.id);",
+									"        console.log('Estatus ID guardado:', response.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"codigo\": \"NUEVO\",\n  \"nombre\": \"Nuevo\",\n  \"descripcion\": \"Registro recién creado\",\n  \"color\": \"#3498db\",\n  \"orden\": 1,\n  \"activo\": true\n}"
+						},
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/estatus",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"estatus"
+							]
+						},
+						"description": "Crear un nuevo estatus"
+					},
+					"response": []
+				},
+				{
+					"name": "Crear Estatus - En Proceso",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"codigo\": \"PROCESO\",\n  \"nombre\": \"En Proceso\",\n  \"descripcion\": \"Registro siendo procesado\",\n  \"color\": \"#f39c12\",\n  \"orden\": 2,\n  \"activo\": true\n}"
+						},
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/estatus",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"estatus"
+							]
+						},
+						"description": "Crear estatus 'En Proceso'"
+					},
+					"response": []
+				},
+				{
+					"name": "Crear Estatus - Completado",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"codigo\": \"COMPLETADO\",\n  \"nombre\": \"Completado\",\n  \"descripcion\": \"Registro procesado exitosamente\",\n  \"color\": \"#27ae60\",\n  \"orden\": 3,\n  \"activo\": true\n}"
+						},
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/estatus",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"estatus"
+							]
+						},
+						"description": "Crear estatus 'Completado'"
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Estatus",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/estatus",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"estatus"
+							]
+						},
+						"description": "Obtener todos los estatus disponibles"
+					},
+					"response": []
+				},
+				{
+					"name": "Obtener Estatus por ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/estatus/{{estatus_id}}",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"estatus",
+								"{{estatus_id}}"
+							]
+						},
+						"description": "Obtener información de un estatus específico"
+					},
+					"response": []
+				},
+				{
+					"name": "Actualizar Estatus",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Nuevo Ingreso\",\n  \"descripcion\": \"Registro recién ingresado al sistema\",\n  \"color\": \"#2980b9\"\n}"
+						},
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/estatus/{{estatus_id}}",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"estatus",
+								"{{estatus_id}}"
+							]
+						},
+						"description": "Actualizar un estatus existente"
+					},
+					"response": []
+				},
+				{
+					"name": "Eliminar Estatus",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/estatus/{{estatus_id}}",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"estatus",
+								"{{estatus_id}}"
+							]
+						},
+						"description": "Eliminar un estatus"
+					},
+					"response": []
+				}
+			],
+			"description": "Gestión de estatus para registros"
+		},
+		{
+			"name": "📄 Registros/Procesos",
+			"item": [
+				{
+					"name": "Crear Registro",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200 || pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    if (response.id) {",
+									"        pm.environment.set('registro_id', response.id);",
+									"        console.log('Registro ID guardado:', response.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"bandeja_id\": \"{{bandeja_id}}\",\n  \"estatus_id\": \"{{estatus_id}}\",\n  \"datos\": {\n    \"nombre_solicitante\": \"Juan Pérez\",\n    \"email\": \"juan.perez@example.com\",\n    \"prioridad\": \"Alta\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/registros",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"registros"
+							]
+						},
+						"description": "Crear un nuevo registro/proceso en una bandeja"
+					},
+					"response": []
+				},
+				{
+					"name": "Crear Registro - Ejemplo 2",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"bandeja_id\": \"{{bandeja_id}}\",\n  \"estatus_id\": \"{{estatus_id}}\",\n  \"datos\": {\n    \"nombre_solicitante\": \"María González\",\n    \"email\": \"maria.gonzalez@example.com\",\n    \"prioridad\": \"Media\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/registros",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"registros"
+							]
+						},
+						"description": "Crear otro registro de ejemplo"
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Registros por Bandeja",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/registros?bandeja_id={{bandeja_id}}&page=1&page_size=25",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"registros"
+							],
+							"query": [
+								{
+									"key": "bandeja_id",
+									"value": "{{bandeja_id}}"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "page_size",
+									"value": "25"
+								}
+							]
+						},
+						"description": "Listar todos los registros de una bandeja con paginación"
+					},
+					"response": []
+				},
+				{
+					"name": "🔍 Buscar Registros - Por Nombre",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/registros/search?bandeja_id={{bandeja_id}}&q=Juan&campos=nombre_solicitante&page=1&page_size=25",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"registros",
+								"search"
+							],
+							"query": [
+								{
+									"key": "bandeja_id",
+									"value": "{{bandeja_id}}"
+								},
+								{
+									"key": "q",
+									"value": "Juan"
+								},
+								{
+									"key": "campos",
+									"value": "nombre_solicitante"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "page_size",
+									"value": "25"
+								}
+							]
+						},
+						"description": "Buscar registros que contengan 'Juan' en el campo nombre_solicitante"
+					},
+					"response": []
+				},
+				{
+					"name": "🔍 Buscar Registros - Por Email",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/registros/search?bandeja_id={{bandeja_id}}&q=example.com&campos=email&page=1&page_size=25",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"registros",
+								"search"
+							],
+							"query": [
+								{
+									"key": "bandeja_id",
+									"value": "{{bandeja_id}}"
+								},
+								{
+									"key": "q",
+									"value": "example.com"
+								},
+								{
+									"key": "campos",
+									"value": "email"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "page_size",
+									"value": "25"
+								}
+							]
+						},
+						"description": "Buscar registros por dominio de email"
+					},
+					"response": []
+				},
+				{
+					"name": "🔍 Buscar Registros - Múltiples Campos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/registros/search?bandeja_id={{bandeja_id}}&q=María&campos=nombre_solicitante,email&page=1&page_size=25",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"registros",
+								"search"
+							],
+							"query": [
+								{
+									"key": "bandeja_id",
+									"value": "{{bandeja_id}}"
+								},
+								{
+									"key": "q",
+									"value": "María"
+								},
+								{
+									"key": "campos",
+									"value": "nombre_solicitante,email"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "page_size",
+									"value": "25"
+								}
+							]
+						},
+						"description": "Buscar 'María' en los campos nombre_solicitante y email"
+					},
+					"response": []
+				},
+				{
+					"name": "🔍 Buscar Registros - En Todos los Campos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/registros/search?bandeja_id={{bandeja_id}}&q=Alta&page=1&page_size=25",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"registros",
+								"search"
+							],
+							"query": [
+								{
+									"key": "bandeja_id",
+									"value": "{{bandeja_id}}"
+								},
+								{
+									"key": "q",
+									"value": "Alta"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "page_size",
+									"value": "25"
+								}
+							]
+						},
+						"description": "Buscar 'Alta' en todos los campos del registro"
+					},
+					"response": []
+				},
+				{
+					"name": "Obtener Registro por ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/registros/{{registro_id}}",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"registros",
+								"{{registro_id}}"
+							]
+						},
+						"description": "Obtener información completa de un registro específico"
+					},
+					"response": []
+				},
+				{
+					"name": "Actualizar Registro",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"datos\": {\n    \"nombre_solicitante\": \"Juan Carlos Pérez\",\n    \"prioridad\": \"Media\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/registros/{{registro_id}}",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"registros",
+								"{{registro_id}}"
+							]
+						},
+						"description": "Actualizar datos de un registro existente"
+					},
+					"response": []
+				},
+				{
+					"name": "Eliminar Registro",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/registros/{{registro_id}}",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"registros",
+								"{{registro_id}}"
+							]
+						},
+						"description": "Eliminar un registro del sistema"
+					},
+					"response": []
+				}
+			],
+			"description": "Gestión de registros/procesos con búsqueda avanzada"
+		},
+		{
+			"name": "🔄 Movimientos",
+			"item": [
+				{
+					"name": "Mover Registro a Otra Bandeja",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"hacia_bandeja_id\": \"{{bandeja_id_destino}}\",\n  \"estatus_id\": \"{{estatus_id}}\",\n  \"motivo\": \"Completado el proceso inicial\",\n  \"movido_por\": \"sistema\",\n  \"metadatos\": {\n    \"aprobado_por\": \"supervisor\",\n    \"comentarios\": \"Todo en orden\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/registros/{{registro_id}}/mover",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"registros",
+								"{{registro_id}}",
+								"mover"
+							]
+						},
+						"description": "Mover un registro de una bandeja a otra"
+					},
+					"response": []
+				},
+				{
+					"name": "Obtener Historial de Movimientos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}{{atlantis_api_path}}/registros/{{registro_id}}/movimientos",
+							"host": [
+								"{{atlantis_base_url}}{{atlantis_api_path}}"
+							],
+							"path": [
+								"registros",
+								"{{registro_id}}",
+								"movimientos"
+							]
+						},
+						"description": "Obtener el historial completo de movimientos de un registro"
+					},
+					"response": []
+				}
+			],
+			"description": "Gestión de movimientos entre bandejas y tracking"
+		},
+		{
+			"name": "📖 Documentación",
+			"item": [
+				{
+					"name": "OpenAPI Schema",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}/openapi.json",
+							"host": [
+								"{{atlantis_base_url}}"
+							],
+							"path": [
+								"openapi.json"
+							]
+						},
+						"description": "Obtener el schema OpenAPI completo"
+					},
+					"response": []
+				},
+				{
+					"name": "Swagger UI",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}/docs",
+							"host": [
+								"{{atlantis_base_url}}"
+							],
+							"path": [
+								"docs"
+							]
+						},
+						"description": "Abrir la documentación interactiva Swagger UI"
+					},
+					"response": []
+				},
+				{
+					"name": "ReDoc",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{atlantis_base_url}}/redoc",
+							"host": [
+								"{{atlantis_base_url}}"
+							],
+							"path": [
+								"redoc"
+							]
+						},
+						"description": "Abrir la documentación ReDoc"
+					},
+					"response": []
+				}
+			],
+			"description": "Documentación y schemas de la API"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Auto-configurar variables base si no existen",
+					"if (!pm.environment.get('atlantis_base_url')) {",
+					"    pm.environment.set('atlantis_base_url', 'http://localhost:8000');",
+					"}",
+					"if (!pm.environment.get('atlantis_api_path')) {",
+					"    pm.environment.set('atlantis_api_path', '/api/v1');",
+					"}"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Log de respuestas para debugging",
+					"if (pm.response.code >= 400) {",
+					"    console.log('❌ Error Response:', pm.response.code, pm.response.status);",
+					"    console.log('Response Body:', pm.response.text());",
+					"} else {",
+					"    console.log('✅ Success:', pm.response.code, pm.response.status);",
+					"}"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "atlantis_base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "atlantis_api_path",
+			"value": "/api/v1",
+			"type": "string"
+		},
+		{
+			"key": "bandeja_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "campo_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "estatus_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "registro_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "bandeja_id_destino",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

@@ -1,0 +1,12 @@
+# Dependencias del SDK de Atlantis
+httpx>=0.24.0
+
+# Dependencias opcionales para desarrollo y testing
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+
+# Para instalar solo las dependencias básicas:
+# pip install httpx
+
+# Para instalar con dependencias de desarrollo:
+# pip install -r requirements.txt

@@ -1,0 +1,81 @@
+# Docker Compose para el microservicio Atlantis
+# Incluye PostgreSQL y el servicio de Atlantis
+
+version: '3.8'
+
+services:
+  # Base de datos PostgreSQL
+  atlantis-db:
+    image: postgres:15
+    container_name: atlantis-postgres
+    environment:
+      POSTGRES_DB: bandejas
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - atlantis_postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - atlantis-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bandejas"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Microservicio Atlantis
+  atlantis-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: atlantis-service
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@atlantis-db:5432/bandejas
+      - API_TITLE=Atlantis - Bandejas Service
+      - API_VERSION=1.0.0
+      - CORS_ORIGINS=*
+      - AMBIENTE=desarrollo
+      - LOG_LEVEL=INFO
+    ports:
+      - "8000:8000"
+    depends_on:
+      atlantis-db:
+        condition: service_healthy
+    networks:
+      - atlantis-network
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Adminer para administración de BD (opcional)
+  atlantis-adminer:
+    image: adminer:4.8.1
+    container_name: atlantis-adminer
+    environment:
+      ADMINER_DEFAULT_SERVER: atlantis-db
+      ADMINER_DESIGN: dracula
+    ports:
+      - "8080:8080"
+    depends_on:
+      - atlantis-db
+    networks:
+      - atlantis-network
+    profiles:
+      - admin
+
+volumes:
+  atlantis_postgres_data:
+    driver: local
+
+networks:
+  atlantis-network:
+    driver: bridge
+    name: atlantis-network

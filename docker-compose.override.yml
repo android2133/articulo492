@@ -50,3 +50,15 @@ services:
           target: /app
         - path: ./geminis/requirements.txt
           action: rebuild
+
+  atlantis:
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0 --port 8000 --reload
+    develop:
+      watch:
+        - path: ./atlantis
+          action: sync
+          target: /app
+        - path: ./atlantis/requirements.txt
+          action: rebuild

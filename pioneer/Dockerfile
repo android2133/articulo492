@@ -34,6 +34,10 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
 
+  
+
+
+
 # ---- Sistema, Chrome y libs que Chrome necesita ----
 RUN set -eux; \
   apt-get update; \
