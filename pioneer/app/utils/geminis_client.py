@@ -141,7 +141,7 @@ class GeminisClient:
 def process_pdf_with_geminis(pdf_uri: str, values: List[Union[str, Dict]], 
                            dest_folder: str = "documentos_anotados",
                            options: Optional[Dict[str, Any]] = None,
-                           geminis_url: str = "http://geminis:8093") -> Dict[str, Any]:
+                           geminis_url: str = "http://geminis:8093/geminis") -> Dict[str, Any]:
     """
     Función de conveniencia para procesar un PDF con GEMINIS
     
@@ -159,7 +159,7 @@ def process_pdf_with_geminis(pdf_uri: str, values: List[Union[str, Dict]],
     return client.process_pdf_sync(pdf_uri, values, dest_folder, options)
 
 
-def check_geminis_health(geminis_url: str = "http://geminis:8093") -> bool:
+def check_geminis_health(geminis_url: str = "http://geminis:8093/geminis") -> bool:
     """
     Verifica si GEMINIS está disponible
     
