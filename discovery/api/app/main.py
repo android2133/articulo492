@@ -34,55 +34,58 @@ async def get_db():
 async def root():
     """Simple health check endpoint."""
     return {"status": "healthy", "service": "discovery-api"}
-
+@app.get("/discovery")
+async def root_discovery():
+    """Simple health check endpoint."""
+    return {"status": "healthy", "service": "discovery-api"}
 @app.get("/health")
 async def health():
     """Health check endpoint."""
     return {"status": "healthy", "service": "discovery-api"}
 
 # ---------- CRUD Workflows ----------
-@app.post("/workflows", response_model=schemas.Workflow)
+@app.post("/discovery/workflows", response_model=schemas.Workflow)
 async def create_workflow(wf: schemas.WorkflowCreate, db: AsyncSession = Depends(get_db)):
     return await crud.create_workflow(db, wf)
 
-@app.get("/workflows", response_model=list[schemas.Workflow])
+@app.get("/discovery/workflows", response_model=list[schemas.Workflow])
 async def list_workflows(db: AsyncSession = Depends(get_db)):
     return await crud.list_workflows(db)
 
 # ---------- WORKFLOWS ----------
-@app.get("/workflows/{wf_id}", response_model=schemas.Workflow)
+@app.get("/discovery/workflows/{wf_id}", response_model=schemas.Workflow)
 async def get_workflow(wf_id: UUID, db: AsyncSession = Depends(get_db)):
     wf = await crud.get_workflow(db, wf_id)
     if not wf:
         raise HTTPException(404)
     return wf
 
-@app.patch("/workflows/{wf_id}", response_model=schemas.Workflow)
+@app.patch("/discovery/workflows/{wf_id}", response_model=schemas.Workflow)
 async def patch_workflow(wf_id: UUID, body: schemas.WorkflowUpdate, db: AsyncSession = Depends(get_db)):
     wf = await crud.update_workflow(db, wf_id, body)
     if not wf:
         raise HTTPException(404)
     return wf
 
-@app.delete("/workflows/{wf_id}", status_code=204)
+@app.delete("/discovery/workflows/{wf_id}", status_code=204)
 async def delete_workflow(wf_id: UUID, db: AsyncSession = Depends(get_db)):
     ok = await crud.delete_workflow(db, wf_id)
     if not ok:
         raise HTTPException(404)
 
 # ---------- STEPS ----------
-@app.post("/workflows/{wf_id}/steps", response_model=schemas.Step)
+@app.post("/discovery/workflows/{wf_id}/steps", response_model=schemas.Step)
 async def add_step(wf_id: UUID, body: schemas.StepCreate, db: AsyncSession = Depends(get_db)):
     # asegúrate de que exista el workflow
     if not await crud.get_workflow(db, wf_id):
         raise HTTPException(404, "workflow not found")
     return await crud.create_step(db, wf_id, body)
 
-@app.get("/workflows/{wf_id}/steps", response_model=list[schemas.Step])
+@app.get("/discovery/workflows/{wf_id}/steps", response_model=list[schemas.Step])
 async def list_steps(wf_id: UUID, db: AsyncSession = Depends(get_db)):
     return await crud.list_steps(db, wf_id)
 
-@app.get("/available-steps")
+@app.get("/discovery/available-steps")
 async def list_available_steps():
     """
     Lista todos los steps disponibles en Pioneer.
@@ -95,28 +98,28 @@ async def list_available_steps():
     except Exception as e:
         raise HTTPException(500, detail=f"Error al obtener steps de Pioneer: {str(e)}")
 
-@app.get("/steps/{step_id}", response_model=schemas.Step)
+@app.get("/discovery/steps/{step_id}", response_model=schemas.Step)
 async def get_step(step_id: UUID, db: AsyncSession = Depends(get_db)):
     st = await crud.get_step(db, step_id)
     if not st:
         raise HTTPException(404)
     return st
 
-@app.patch("/steps/{step_id}", response_model=schemas.Step)
+@app.patch("/discovery/steps/{step_id}", response_model=schemas.Step)
 async def patch_step(step_id: UUID, body: schemas.StepUpdate, db: AsyncSession = Depends(get_db)):
     st = await crud.update_step(db, step_id, body)
     if not st:
         raise HTTPException(404)
     return st
 
-@app.delete("/steps/{step_id}", status_code=204)
+@app.delete("discovery/steps/{step_id}", status_code=204)
 async def delete_step(step_id: UUID, db: AsyncSession = Depends(get_db)):
     ok = await crud.delete_step(db, step_id)
     if not ok:
         raise HTTPException(404)
 
 # ---------- Ejecutar ----------
-@app.post("/workflows/{wf_id}/execute", response_model=schemas.Execution)
+@app.post("/discovery/workflows/{wf_id}/execute", response_model=schemas.Execution)
 async def execute_workflow(wf_id: str, body: schemas.WorkflowExecutionCreate, db: AsyncSession = Depends(get_db)):
     """
     Ejecuta un workflow creando una nueva ejecución.
@@ -146,7 +149,7 @@ async def execute_workflow(wf_id: str, body: schemas.WorkflowExecutionCreate, db
         await db.refresh(exec_obj)
     return exec_obj
 
-@app.post("/workflows/{wf_id}/execute-async", response_model=dict)
+@app.post("/discovery/workflows/{wf_id}/execute-async", response_model=dict)
 async def execute_workflow_async(wf_id: str, body: schemas.WorkflowExecutionCreate, db: AsyncSession = Depends(get_db)):
     """
     Ejecuta un workflow de forma asíncrona.
@@ -182,7 +185,7 @@ async def execute_workflow_async(wf_id: str, body: schemas.WorkflowExecutionCrea
     }
 
 # Endpoint de compatibilidad hacia atrás
-@app.post("/execute/", response_model=schemas.Execution)
+@app.post("/discovery/execute/", response_model=schemas.Execution)
 async def execute_workflow_legacy(body: schemas.ExecutionCreate, db: AsyncSession = Depends(get_db)):
     """
     Endpoint de compatibilidad hacia atrás para ejecutar workflows.
@@ -202,7 +205,7 @@ async def execute_workflow_legacy(body: schemas.ExecutionCreate, db: AsyncSessio
         await db.refresh(exec_obj)
     return exec_obj
 
-@app.post("/execute-async/", response_model=dict)
+@app.post("/discovery/execute-async/", response_model=dict)
 async def execute_workflow_legacy_async(body: schemas.ExecutionCreate, db: AsyncSession = Depends(get_db)):
     """
     Endpoint de compatibilidad hacia atrás para ejecutar workflows de forma asíncrona.
@@ -227,7 +230,7 @@ async def execute_workflow_legacy_async(body: schemas.ExecutionCreate, db: Async
         "created_at": exec_obj.created_at.isoformat() if exec_obj.created_at else None
     }
 
-@app.get("/workflows/{wf_id}/executions")
+@app.get("/discovery/workflows/{wf_id}/executions")
 async def get_workflow_executions(
     wf_id: str, 
     limit: int = 20,
@@ -325,7 +328,7 @@ async def get_workflow_executions(
         }
     }
 
-@app.get("/executions/{exec_id}/status", response_model=dict)
+@app.get("/discovery/executions/{exec_id}/status", response_model=dict)
 async def get_execution_status(exec_id: str, db: AsyncSession = Depends(get_db)):
     """
     Obtiene el estado actual de una ejecución asíncrona.
@@ -443,7 +446,7 @@ async def get_execution_status(exec_id: str, db: AsyncSession = Depends(get_db))
         }
     }
 
-@app.get("/executions/{exec_id}/steps", response_model=list[schemas.StepExecution])
+@app.get("/discovery/executions/{exec_id}/steps", response_model=list[schemas.StepExecution])
 async def get_execution_steps(exec_id: str, db: AsyncSession = Depends(get_db)):
     """
     Obtiene el historial de todos los steps ejecutados en una ejecución específica.
@@ -463,7 +466,7 @@ async def get_execution_steps(exec_id: str, db: AsyncSession = Depends(get_db)):
     step_executions = result.scalars().all()
     return step_executions
 
-@app.post("/executions/{exec_id}/next", response_model=schemas.Execution)
+@app.post("/discovery/executions/{exec_id}/next", response_model=schemas.Execution)
 async def next_step(exec_id: str, db: AsyncSession = Depends(get_db)):
     # Forzar una consulta fresca en lugar de usar caché
     stmt = select(models.DiscoveryWorkflowExecution).where(models.DiscoveryWorkflowExecution.id == exec_id)
@@ -490,7 +493,7 @@ async def next_step(exec_id: str, db: AsyncSession = Depends(get_db)):
     print(f"[ENDPOINT] Contexto DESPUÉS de refresh: {q.context}")
     return q
 
-@app.post("/executions/{exec_id}/steps/{step_name}/progress")
+@app.post("/discovery/executions/{exec_id}/steps/{step_name}/progress")
 async def mark_step_progress(
     exec_id: str, 
     step_name: str,
@@ -523,7 +526,7 @@ async def mark_step_progress(
         "progress_recorded": progress
     }
 
-@app.post("/executions/{exec_id}/steps/{step_name}/complete")
+@app.post("/discovery/executions/{exec_id}/steps/{step_name}/complete")
 async def mark_step_completed(
     exec_id: str,
     step_name: str, 
@@ -556,7 +559,7 @@ async def mark_step_completed(
     }
 
 # ---------- WebSocket ----------
-@app.websocket("/ws/{exec_id}")
+@app.websocket("/discovery/ws/{exec_id}")
 async def ws(exec_id: str, websocket_: WebSocket):
     await websocket.websocket_endpoint(websocket_, exec_id)
 

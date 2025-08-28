@@ -21,7 +21,13 @@ async def health_check():
     """Endpoint de salud para verificar que el servicio está funcionando."""
     return {"status": "ok", "service": "pioneer", "description": "Workflow Steps Service"}
 
-@app.get("/steps")
+
+@app.get("/pioneer")
+async def health_check_name():
+    """Endpoint de salud para verificar que el servicio está funcionando."""
+    return {"status": "ok", "service": "pioneer", "description": "Workflow Steps Service"}
+
+@app.get("/pioneer/steps")
 async def list_available_steps():
     """Lista todos los steps disponibles en Pioneer."""
     from .step_registry import get_all_handlers
@@ -45,7 +51,7 @@ async def list_available_steps():
         "total_count": len(steps_info)
     }
 
-@app.post("/steps/{step_name}", response_model=StepResponse)
+@app.post("/pioneer/steps/{step_name}", response_model=StepResponse)
 async def execute_step(step_name: str, req: StepRequest):
     """
     Ejecuta el step indicado.

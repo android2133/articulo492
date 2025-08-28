@@ -28,9 +28,13 @@ if not logger.handlers:
 
 
 # ---------- Pioneer HTTP Client ----------
+# ---------- Pioneer HTTP Client ----------
 class PioneerClient:
     def __init__(self, base_url: str = None):
-        self.base_url = base_url or os.getenv("PIONEER_URL", "http://localhost:8000")
+        resolved = (base_url or os.getenv("PIONEER_URL", "http://pioneer:8094/pioneer")).rstrip("/")
+        self.base_url = resolved
+        logger.info("PIONEER_URL resuelta: %s", self.base_url)  #
+
     
     async def call_remote_step(
         self, 

@@ -1,43 +1,13 @@
-# FROM python:3.12-slim
-
-# WORKDIR /app
-
-# ENV GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
-
-
-# # Instalar curl para healthcheck
-# RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
-
-# # Copiar requirements.txt primero para mejor cache de Docker
-# COPY requirements.txt .
-
-# # Instalar dependencias
-# RUN pip install --no-cache-dir -r requirements.txt
-
-# # Copiar código
-# COPY ./app ./app
-
-# # Copiar credenciales de Google Cloud
-# COPY credentials.json .
-
-# # Exponer puerto
-# EXPOSE 8000
-
-# # Comando por defecto
-# CMD ["python", "-m", "app.main"]
-
-
 FROM python:3.12-slim
 
 WORKDIR /app
+
+COPY credentials.json /app/credentials.json
+
 ENV PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
-
-  
-
-
-
+    PIP_NO_CACHE_DIR=1 
+ENV GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
+# Todo por 8094
 # ---- Sistema, Chrome y libs que Chrome necesita ----
 RUN set -eux; \
   apt-get update; \
@@ -56,13 +26,12 @@ RUN set -eux; \
 
 # ---- Python ----
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# ---- Código y credenciales ----
+# ---- Código ----
 COPY ./app ./app
-COPY credentials.json .
+COPY ./core ./core
 
-EXPOSE 8000
 
-# Nota: tu app puede lanzar uvicorn desde app/main.py
-CMD ["python", "-m", "app.main"]
+EXPOSE 8094
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8094"]

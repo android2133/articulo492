@@ -78,7 +78,18 @@ async def root():
         "docs": "/docs",
         "redoc": "/redoc"
     }
-
+@app.get("/bandeja")
+async def root():
+    """Endpoint raíz del microservicio"""
+    ambiente = app_settings.AMBIENTE if app_settings else os.getenv("AMBIENTE", "desarrollo")
+    return {
+        "service": "Atlantis - Bandejas Service",
+        "version": API_VERSION,
+        "environment": ambiente,
+        "status": "running",
+        "docs": "/docs",
+        "redoc": "/redoc"
+    }
 
 @app.get("/health")
 async def health():

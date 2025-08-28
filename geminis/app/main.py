@@ -53,9 +53,20 @@ class ProcessSyncResponse(BaseModel):
     processing_time_seconds: float
     summary: Dict[str, int]
     annotated_values: List[Dict[str, Any]]
+@app.get("/")
+async def health_check():
+    """Endpoint de salud para verificar que el servicio está funcionando correctamente geminis."""
+    return {"status": "ok", "service": "geminis", "description": "Workflow Steps Service"}
 
+
+
+
+@app.get("/geminis")
+async def health_check_name():
+    """Endpoint de salud para verificar que el servicio está funcionando correctamente geminis."""
+    return {"status": "ok", "service": "geminis", "description": "Workflow Steps Service"}
 # ----------------- endpoint síncrono especial -----------------
-@app.post("/process-sync", response_model=ProcessSyncResponse)
+@app.post("/geminis/process-sync", response_model=ProcessSyncResponse)
 def process_pdf_sync(req: ProcessSyncRequest):
     """
     Procesa un PDF de forma síncrona:
@@ -167,7 +178,7 @@ def process_pdf_sync(req: ProcessSyncRequest):
         raise HTTPException(status_code=500, detail=f"Error procesando PDF: {str(e)}")
 
 # ----------------- endpoints cola -----------------
-@app.post("/enqueue")
+@app.post("/geminis/enqueue")
 def enqueue(req: ProcessRequest):
     job_id = str(uuid.uuid4())
     payload: Dict[str, Any] = {
@@ -189,7 +200,7 @@ def enqueue(req: ProcessRequest):
         conn.commit()
     return {"status": "enqueued", "job_id": job_id}
 
-@app.get("/jobs/{job_id}")
+@app.get("/geminis/jobs/{job_id}")
 def job_status(job_id: str):
     with get_conn() as conn, conn.cursor(row_factory=dict_row) as cur:
         cur.execute("SELECT id,status,attempts,max_retries,created_at,started_at,finished_at,error,result,filename FROM jobs WHERE id=%s", (job_id,))
@@ -198,7 +209,7 @@ def job_status(job_id: str):
         raise HTTPException(status_code=404, detail="job no encontrado")
     return dict(row)
 
-@app.delete("/jobs/{job_id}")
+@app.delete("/geminis/jobs/{job_id}")
 def cancel_job(job_id: str):
     # sólo cancela si está en queued
     with get_conn() as conn, conn.cursor() as cur:
@@ -208,7 +219,7 @@ def cancel_job(job_id: str):
         conn.commit()
     return {"status": "canceled", "id": job_id}
 
-@app.post("/jobs/{job_id}/requeue")
+@app.post("/geminis/jobs/{job_id}/requeue")
 def requeue_job(job_id: str):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
@@ -220,7 +231,7 @@ def requeue_job(job_id: str):
         conn.commit()
     return {"status": "requeued", "id": job_id}
 
-@app.get("/queue/summary")
+@app.get("/geminis/queue/summary")
 def queue_summary():
     with get_conn() as conn, conn.cursor(row_factory=dict_row) as cur:
         cur.execute("""
@@ -235,7 +246,7 @@ def queue_summary():
         running = cur.fetchone()["n"]
     return {"queued": queued, "running": running, "by_status": rows}
 
-@app.get("/queue/pending")
+@app.get("/geminis/queue/pending")
 def queue_pending(limit: int = 50):
     with get_conn() as conn, conn.cursor(row_factory=dict_row) as cur:
         cur.execute("""
@@ -248,7 +259,7 @@ def queue_pending(limit: int = 50):
         rows = cur.fetchall()
     return rows
 
-@app.get("/queue/failed")
+@app.get("/geminis/queue/failed")
 def queue_failed(limit: int = 50):
     with get_conn() as conn, conn.cursor(row_factory=dict_row) as cur:
         cur.execute("""
@@ -261,11 +272,11 @@ def queue_failed(limit: int = 50):
     return rows
 
 # ---------------- health / ready ----------------
-@app.get("/healthz")
+@app.get("/geminis/healthz")
 def healthz():
     return {"status": "ok"}
 
-@app.get("/readyz")
+@app.get("/geminis/readyz")
 def readyz():
     try:
         with get_conn() as conn, conn.cursor() as cur:
