@@ -12,13 +12,47 @@ import json
 import base64
 import httpx
 import os
+import tempfile
 from pathlib import Path
 from copy import deepcopy
 from datetime import datetime, timezone
+import difflib  # Para búsqueda difusa de texto
 
 
 # Import para el servicio de modelo dinámico
 from app.service.modelo_dinamico_simplified import procesar_con_modelo_dinamico_desde_bd
+
+def find_best_field_match(fields: dict, target_patterns: list, min_similarity: float = 0.6):
+    """
+    Encuentra el mejor campo que coincida con los patrones objetivo usando búsqueda difusa.
+    
+    Args:
+        fields: Diccionario de campos {nombre_campo: valor}
+        target_patterns: Lista de patrones a buscar
+        min_similarity: Similitud mínima requerida (0.0 a 1.0)
+    
+    Returns:
+        tuple: (nombre_campo_encontrado, valor, similitud) o (None, None, 0)
+    """
+    best_match = None
+    best_value = None
+    best_similarity = 0
+    
+    for field_name, field_value in fields.items():
+        if not field_value:  # Saltar campos vacíos
+            continue
+            
+        # Verificar similitud con cada patrón objetivo
+        for pattern in target_patterns:
+            # Usar difflib para calcular similitud
+            similarity = difflib.SequenceMatcher(None, field_name.upper(), pattern.upper()).ratio()
+            
+            if similarity > best_similarity and similarity >= min_similarity:
+                best_match = field_name
+                best_value = field_value
+                best_similarity = similarity
+    
+    return best_match, best_value, best_similarity
 
 # Función auxiliar para reportar progreso a Discovery
 async def report_progress(execution_id: str, step_name: str, progress_data: dict):
@@ -30,7 +64,7 @@ async def report_progress(execution_id: str, step_name: str, progress_data: dict
         step_name: Nombre del step que reporta
         progress_data: Datos de progreso (percentage, message, etc.)
     """
-    discovery_url = os.getenv("DISCOVERY_URL", "http://localhost:8080")
+    discovery_url = os.getenv("DISCOVERY_URL", "http://localhost:8000")
     
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -50,7 +84,7 @@ async def report_completion(execution_id: str, step_name: str, result_data: dict
         step_name: Nombre del step completado
         result_data: Datos del resultado
     """
-    discovery_url = os.getenv("DISCOVERY_URL", "http://localhost:8080")
+    discovery_url = os.getenv("DISCOVERY_URL", "http://localhost:8000")
     
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -60,6 +94,59 @@ async def report_completion(execution_id: str, step_name: str, result_data: dict
             )
     except Exception as e:
         print(f"[COMPLETION REPORT] Error reportando completado: {e}")
+
+async def complete_workflow_execution(execution_id: str, status: str = "completed"):
+    """
+    Marca directamente el workflow como completado en Discovery.
+    
+    Args:
+        execution_id: ID del workflow execution
+        status: Estado final del workflow (completed, failed, etc.)
+    """
+    discovery_url = os.getenv("DISCOVERY_URL", "http://localhost:8000")
+    
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            # Opción 1: Intentar el endpoint específico para completar workflow
+            response = await client.post(
+                f"{discovery_url}/executions/{execution_id}/complete",
+                json={
+                    "status": status,
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                    "final_result": f"Workflow finalizado con estado: {status}"
+                }
+            )
+            
+            if response.status_code == 200:
+                print(f"[WORKFLOW] ✓ Workflow {execution_id} actualizado a estado: {status}")
+                return True
+            elif response.status_code == 404:
+                # Si no existe ese endpoint, intentar marcar como step completion especial
+                print(f"[WORKFLOW] Endpoint /complete no encontrado, usando step completion...")
+                response2 = await client.post(
+                    f"{discovery_url}/executions/{execution_id}/steps/workflow_completion/complete",
+                    json={
+                        "status": status,
+                        "workflow_completed": True,
+                        "completed_at": datetime.now(timezone.utc).isoformat(),
+                        "final_result": f"Workflow finalizado con estado: {status}"
+                    }
+                )
+                
+                if response2.status_code in [200, 201]:
+                    print(f"[WORKFLOW] ✓ Workflow {execution_id} marcado como completado via step completion")
+                    return True
+                else:
+                    print(f"[WORKFLOW] Error en step completion: {response2.status_code}")
+                    return False
+            else:
+                print(f"[WORKFLOW] Error actualizando workflow: {response.status_code}")
+                print(f"[WORKFLOW] Response: {response.text}")
+                return False
+                
+    except Exception as e:
+        print(f"[WORKFLOW] Error marcando workflow: {e}")
+        return False
 
 @register("fetch_user")
 async def fetch_user(context: dict, config: dict) -> dict:
@@ -146,7 +233,44 @@ async def fetch_user(context: dict, config: dict) -> dict:
                     "current_task": "Organizando documento"
                 })
             
-            cosa = resultado_llm["resultado"]["fcc"]["presente"]
+            # cosa = resultado_llm["resultado"]["fcc"]["presente"]
+            
+            
+            ##Determino si el expediente esta completo o no
+            
+            # Diccionario para mostrar nombres más amigables
+            nombres_documentos = {
+                "csf": "Constancia de Situación Fiscal",
+                "fcc": "Formulario de Cumplimiento de Cliente",
+                "ine": "INE",
+                "rpp": "Registro Público de la Propiedad",
+                "constancia_fea": "Constancia de Firma Electrónica Avanzada",
+                "poder_notarial": "Poder Notarial",
+                "acta_constitutiva": "Acta Constitutiva",
+                "comprobante_domicilio": "Comprobante de Domicilio"
+            }
+
+            # Detectar documentos faltantes
+            faltantes = [
+                nombres_documentos[doc]
+                for doc, datos in resultado_llm["resultado"].items()
+                if not datos["presente"]
+            ]
+
+            # Variable booleana
+            expedienteConCargaCompleta = len(faltantes) == 0
+
+            # Variable texto
+            if expedienteConCargaCompleta:
+                expedienteCompleto = "El expediente está completo"
+            else:
+                expedienteCompleto = "Faltan los documentos: " + ", ".join(faltantes)
+
+            print("expedienteCompleto:", expedienteCompleto)
+            print("expedienteConCargaCompleta:", expedienteConCargaCompleta)
+            
+            
+            
             
             orden_objetivo = [
                 "fcc",
@@ -161,6 +285,7 @@ async def fetch_user(context: dict, config: dict) -> dict:
             
             # Inicializar el manager de GCS para pasarlo a la función de reordenamiento
             gcs_manager = GCSFileManager()
+            
             
             res = reorder_pdf_sections(
                 secciones=resultado_llm["resultado"],
@@ -193,11 +318,87 @@ async def fetch_user(context: dict, config: dict) -> dict:
                 try:
                     # Crear nombre de archivo único para subir al bucket
                     timestamp = int(time.time())
+                    
+                    # PASO 1: Marcar el PDF con validación ANTES de subirlo a GCS
+                    print(f"[FETCH_USER] Marcando PDF con validación antes de subir a GCS...")
+                    
+                    # Importar las dependencias necesarias
+                    import tempfile
+                    import os
+                    
+                    # Variables para manejar el PDF final
+                    pdf_b64_final = pdf_b64
+                    pdf_bytes_final = base64.b64decode(pdf_b64)
                     pdf_filename = f"documento_reordenado_{timestamp}.pdf"
                     
-                    # Calcular tamaño del PDF
-                    pdf_bytes = base64.b64decode(pdf_b64)
-                    pdf_size_kb = round(len(pdf_bytes) / 1024, 2)
+                    try:
+                        # Importar la funcionalidad de marcado
+                        from app.utils.marcarPDF import MarcadorPDF
+                        
+                        # Crear instancia del marcador
+                        marcador = MarcadorPDF(bucket_name="perdidas-totales-pruebas")
+                        
+                        # Crear archivo temporal para el PDF original
+                        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_original:
+                            temp_original.write(pdf_bytes_final)
+                            temp_original_path = temp_original.name
+                        
+                        # Crear archivo temporal para el PDF marcado
+                        with tempfile.NamedTemporaryFile(delete=False, suffix='_marcado.pdf') as temp_marcado:
+                            temp_marcado_path = temp_marcado.name
+                        
+                        try:
+                            # Marcar el PDF localmente
+                            resultado_marcado = marcador.marcar_pdf_local(
+                                input_path=temp_original_path,
+                                output_path=temp_marcado_path
+                            )
+                            
+                            if resultado_marcado["success"]:
+                                print(f"[FETCH_USER] ✓ PDF marcado exitosamente con: {resultado_marcado['marca_aplicada']}")
+                                
+                                # Leer el PDF marcado y convertirlo a base64
+                                with open(temp_marcado_path, 'rb') as marcado_file:
+                                    pdf_marcado_bytes = marcado_file.read()
+                                    pdf_marcado_b64 = base64.b64encode(pdf_marcado_bytes).decode('utf-8')
+                                    
+                                # Usar el PDF marcado en lugar del original
+                                pdf_b64_final = pdf_marcado_b64
+                                pdf_bytes_final = pdf_marcado_bytes
+                                pdf_filename = f"documento_reordenado_marcado_{timestamp}.pdf"
+                                
+                                print(f"[FETCH_USER] ✓ Usando PDF marcado para subir a GCS (tamaño: {len(pdf_bytes_final)/1024:.1f} KB)")
+                                
+                            else:
+                                print(f"[FETCH_USER] ⚠ Error marcando PDF: {resultado_marcado.get('error', 'Error desconocido')}")
+                                print(f"[FETCH_USER] → Continuando con PDF original sin marca")
+                                
+                        except Exception as marcado_inner_error:
+                            print(f"[FETCH_USER] ⚠ Excepción durante marcado: {str(marcado_inner_error)}")
+                            print(f"[FETCH_USER] → Continuando con PDF original sin marca")
+                            
+                        finally:
+                            # Limpiar archivos temporales
+                            try:
+                                if os.path.exists(temp_original_path):
+                                    os.unlink(temp_original_path)
+                                if os.path.exists(temp_marcado_path):
+                                    os.unlink(temp_marcado_path)
+                            except Exception as cleanup_error:
+                                print(f"[FETCH_USER] Advertencia limpiando archivos temporales: {cleanup_error}")
+                                
+                    except ImportError as import_error:
+                        print(f"[FETCH_USER] ⚠ Error importando MarcadorPDF: {import_error}")
+                        print(f"[FETCH_USER] → Continuando con PDF original sin marca")
+                    except Exception as marcado_error:
+                        print(f"[FETCH_USER] ⚠ Error general en marcado: {str(marcado_error)}")
+                        print(f"[FETCH_USER] → Continuando con PDF original sin marca")
+                    
+                    # PASO 2: Subir el PDF (marcado o original) a GCS
+                    print(f"[FETCH_USER] Subiendo PDF a GCS...")
+                    
+                    # Calcular tamaño del PDF final
+                    pdf_size_kb = round(len(pdf_bytes_final) / 1024, 2)
                     
                     # Inicializar el manager de GCS y subir el archivo
                     gcs_manager = GCSFileManager()
@@ -206,7 +407,7 @@ async def fetch_user(context: dict, config: dict) -> dict:
                     folder_path = f"procesos/{uuid_proceso}"
                     
                     gcs_upload_result = gcs_manager.upload_file_to_folder(
-                        base64_content=pdf_b64,
+                        base64_content=pdf_b64_final,
                         mime_type="application/pdf",
                         filename=pdf_filename,
                         folder=folder_path,
@@ -288,6 +489,15 @@ async def fetch_user(context: dict, config: dict) -> dict:
     
     ################################## NO BORRAR ###############################################
     
+    archivos_completo = [{
+                "nombre": "archivo.pdf",
+                "url": user.get("pdf_reordenado", {}).get("gcs_uri", "") if 'user' in locals() else "",
+                "mimetype": "application/pdf"
+            }]
+            
+    
+    resultado_pagina_ine = await procesar_con_modelo_dinamico_desde_bd(archivos_data, "encuentra_pagina_ine")
+    
     # Reportar completado si tenemos execution_id
     if execution_id:
         await report_completion(execution_id, "fetch_user", {
@@ -328,120 +538,18 @@ async def fetch_user(context: dict, config: dict) -> dict:
                 "pdf_anotado_gcs_uri": user.get("pdf_anotado", {}).get("gcs_uri", "") if 'user' in locals() else "",
                 "pdf_anotado_tiempo_procesamiento": user.get("pdf_anotado", {}).get("tiempo_anotacion_segundos", 0) if 'user' in locals() else 0,
                 "pdf_anotado_valores_encontrados": len(user.get("pdf_anotado", {}).get("valores_anotados", [])) if 'user' in locals() else 0,
-                "pdf_anotado_resumen": user.get("pdf_anotado", {}).get("resumen_anotaciones", {}) if 'user' in locals() else {}
+                "pdf_anotado_resumen": user.get("pdf_anotado", {}).get("resumen_anotaciones", {}) if 'user' in locals() else {},
+                "expedienteCompleto": expedienteCompleto,
+                "expedienteConCargaCompleta": expedienteConCargaCompleta,
+                "paginaIneApoderado": resultado_pagina_ine["resultado"]
+
+          
+            
             }
         },
         # Siempre siguiente a la validación
         "next": "validate_user"
     }
-
-# @register("validate_user")
-# async def validate_user(context: dict, config: dict) -> dict:
-#     """
-#    Ahora vamos a hacer ocr al documento y obtner los datos necesarios para pintar el documento
-#     """
-#     dynamic_props = context.get("dynamic_properties", {})
-
-#     mime_type = dynamic_props.get("mime_type") or context.get("mime_type", "")
-#     # print("mime_type", mime_type)
-#     pdf_reordenado_gcs_uri = dynamic_props.get("pdf_reordenado_gcs_uri") or context.get("pdf_reordenado_gcs_uri", "")
-#     nombre_documento = dynamic_props.get("nombre_documento") or context.get("nombre_documento", "")
-
-
-#     try:
-#             # Preparar datos para el modelo dinámico
-#             archivos_data = [{
-#                 "nombre": nombre_documento,
-#                 "url": pdf_reordenado_gcs_uri,
-#                 "mimetype": mime_type
-#             }]
-
-#             print("archivos", archivos_data)
-
-#             # Obtener nombre del modelo desde config o usar por defecto
-#             nombre_modelo = "extrae_data_492"
-            
-#             print(f"[validate_user] Procesando documento con modelo dinámico: {nombre_modelo}")
-            
-#             # Procesar con modelo dinámico (obtiene modelo desde BD)
-#             resultado_llm = await procesar_con_modelo_dinamico_desde_bd(archivos_data, nombre_modelo)
-#             # print(f"[validate_user] Resultado del procesamiento: {resultado_llm}")
-#     except Exception as e:
-#             print(f"[validate_user] Error procesando documento: {e}")
-#             resultado_llm = {"error": str(e)}
-
-
-#     # # Obtener las propiedades dinámicas
-#     # dynamic_props = context.get("dynamic_properties", {})
-#     # manual = dynamic_props.get("manual", False)
-#     # documento_procesado = dynamic_props.get("documento_procesado", False)
-    
-#     # # Lógica de validación con datos dinámicos
-#     valid = False
-#     # validation_reasons = []
-    
-#     # # Validación del estado del procesamiento
-#     # user_status = user.get("status", "unknown")
-    
-#     # if user_status == "error":
-#     #     valid = False
-#     #     validation_reasons.append(f"Error procesando documento: {user.get('error', 'Error desconocido')}")
-#     # elif user_status == "sin_documento":
-#     #     valid = False
-#     #     validation_reasons.append("No se proporcionó documento para procesar")
-#     # elif user_status == "procesado":
-#     #     # Documento procesado exitosamente
-#     #     resultado_llm = user.get("resultado_llm", {})
-        
-#     #     # Validar que el LLM devolvió datos útiles
-#     #     if resultado_llm:
-#     #         valid = True
-#     #         validation_reasons.append("Documento procesado exitosamente por el modelo dinámico")
-            
-#     #         # Validaciones adicionales basadas en el contenido extraído
-#     #         if isinstance(resultado_llm, dict):
-#     #             # Contar campos extraídos
-#     #             campos_extraidos = len(resultado_llm.keys())
-#     #             if campos_extraidos > 0:
-#     #                 validation_reasons.append(f"Se extrajeron {campos_extraidos} campos del documento")
-#     #             else:
-#     #                 valid = False
-#     #                 validation_reasons.append("El modelo no extrajo información útil del documento")
-#     #     else:
-#     #         valid = False
-#     #         validation_reasons.append("El modelo no devolvió resultados válidos")
-#     # else:
-#     #     valid = False
-#     #     validation_reasons.append(f"Estado desconocido del procesamiento: {user_status}")
-    
-#     # # Validación de la propiedad manual
-#     # if manual:
-#     #     validation_reasons.append("Procesamiento manual solicitado - requiere revisión humana")
-#     #     # En un flujo real, esto podría cambiar el siguiente paso
-    
-#     ctx_update = {
-#         "valid": "true", 
-#         "validation_reason": "",
-#         "validated_at": "2025-08-02T23:54:30Z",
-#         "dynamic_properties": {
-#             "resultado_llm_extraccion_data": resultado_llm["resultado"],
-#         }
-#         # "validation_details": {
-#         #     "documento_procesado": documento_procesado,
-#         #     "status_documento": user_status,
-#         #     "tiene_resultado_llm": bool(user.get("resultado_llm")),
-#         #     "manual_processing": manual,
-#         #     "metadata_llm": user.get("metadata_llm", {})
-#         # }
-#     }
-    
-#     # print(f"[VALIDATE_USER] Resultado validación: {valid}, Razones: {validation_reasons}")
-    
-#     # Si no es válido, va a `reject_user`, sino a `transform_data`
-#     return {
-#         "context": ctx_update,
-#         "next": "reject_user" if not valid else "transform_data"
-#     }
 
 @register("validate_user")
 async def validate_user(context: dict, config: dict) -> dict:
@@ -546,20 +654,80 @@ async def transform_data(context: dict, config: dict) -> dict:
     
     documents = data["resultado_llm_extraccion_data"]["documents"]
 
+    print("documentos----------------------------")
+    print(documents)
+
     # Buscar el documento deseado
     valor = None
     for doc in documents:
         if doc["name"] == "Formato conoce a tu cliente PERSONA MORAL MEXICANA":
-            valor = doc["fields"].get("NOMBRE_DEL_ADMINISTRADOR_UNICO_O_DIRECTOR_GENERAL_APODERADO_QUIEN_DEBERA_FIRMAR_EL_FORMATO")
+            print("encontrado!!!")
+            
+            # Estrategia 1: Búsqueda exacta
+            valor = doc["fields"].get("NOMBRE_DEL_ADMINISTRADOR_UNICO_DIRECTOR_GENERAL_APODERADO")
+            
+            # Estrategia 2: Si no encuentra exacto, buscar por palabras clave
+            if valor is None:
+                # Buscar campos que contengan palabras clave relacionadas con administrador/director
+                keywords = ["ADMINISTRADOR", "DIRECTOR", "GENERAL", "APODERADO", "REPRESENTANTE", "LEGAL"]
+                
+                for field_name, field_value in doc["fields"].items():
+                    # Verificar si el campo contiene alguna de las palabras clave
+                    if any(keyword in field_name.upper() for keyword in keywords):
+                        # Además verificar que contenga "NOMBRE" para ser más específico
+                        if "NOMBRE" in field_name.upper():
+                            print(f"Campo encontrado por similitud: {field_name}")
+                            valor = field_value
+                            break
+            
+            # Estrategia 3: Búsqueda difusa usando patrones similares
+            if valor is None:
+                target_patterns = [
+                    "NOMBRE_DEL_ADMINISTRADOR_UNICO_DIRECTOR_GENERAL_APODERADO",
+                    "NOMBRE_ADMINISTRADOR_DIRECTOR_GENERAL",
+                    "NOMBRE_REPRESENTANTE_LEGAL",
+                    "ADMINISTRADOR_UNICO",
+                    "DIRECTOR_GENERAL"
+                ]
+                
+                field_name, valor, similarity = find_best_field_match(
+                    doc["fields"], 
+                    target_patterns, 
+                    min_similarity=0.5
+                )
+                
+                if valor:
+                    print(f"Campo encontrado por búsqueda difusa: {field_name} (similitud: {similarity:.2f})")
+            
+            # Estrategia 4: Si aún no encuentra, buscar cualquier campo que contenga "NOMBRE" y tenga formato de nombre completo
+            if valor is None:
+                for field_name, field_value in doc["fields"].items():
+                    if ("NOMBRE" in field_name.upper() and 
+                        field_value and 
+                        isinstance(field_value, str) and
+                        "," in field_value):  # Formato: Apellidos, Nombres
+                        print(f"Campo encontrado por formato de nombre: {field_name}")
+                        valor = field_value
+                        break
+                        
+            print(f"Valor extraído: {valor}")
             break
 
-    # print(valor)
-    # Separar por la coma
-    partes = valor.split(",")
-
-    # Limpiar y convertir a minúsculas
-    apellidos = partes[0].strip().lower()
-    nombres = partes[1].strip().lower()
+    print("aqui va el valor$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+    print(valor)
+    
+    # Verificar que el valor no sea None antes de procesarlo
+    if valor is None:
+        print("ERROR: No se pudo extraer el nombre del administrador")
+        apellidos = "sin_datos"
+        nombres = "sin_datos"
+    else:
+        # Separar por la coma
+        partes = valor.split(",")
+        
+        # Limpiar y convertir a minúsculas
+        apellidos = partes[0].strip().lower()
+        nombres = partes[1].strip().lower() if len(partes) > 1 else "sin_nombres"
 
     print("apellidos =", apellidos)
     print("nombres =", nombres)
@@ -699,7 +867,7 @@ async def transform_data(context: dict, config: dict) -> dict:
         print(f"[transform_data] Iniciando validación de INE...")
         
         # Inicializar resultado_listas_negras para evitar errores de variable no definida
-        resultado_listas_negras = None
+        # resultado_listas_negras = None
         
         try:
             # Llamar a la función de validación de INE con el uuid_proceso
@@ -716,51 +884,6 @@ async def transform_data(context: dict, config: dict) -> dict:
                 "validacion_exitosa": False
             }
         
-        # Consultar listas negras con el apellido extraído del modelo de INE (independiente de la validación de INE)
-        # try:
-        #     apellido = resultado_llm.get("resultado", {}).get("apellido", "")
-            
-        #     if apellido:
-        #         print(f"[transform_data] Consultando listas negras para apellido: {apellido}")
-                
-        #         if execution_id:
-        #             await report_progress(execution_id, "transform_data", {
-        #                 "percentage": 75,
-        #                 "message": "Consultando listas negras",
-        #                 "current_task": f"Verificando apellido {apellido}"
-        #             })
-                
-        #         try:
-        #             async with httpx.AsyncClient(timeout=30) as client:
-        #                 response = await client.post(
-        #                     "https://valuacion.aseguradoradigital.com.mx/api/services/app/Consultas/BuscarEnListasNegras",
-        #                     json={"nombre": f"%{apellido}%"},
-        #                     headers={"Content-Type": "application/json"}
-        #                 )
-                        
-        #                 if response.status_code == 200:
-        #                     resultado_listas_negras = response.json()
-        #                     print(f"[transform_data] Resultado listas negras: {resultado_listas_negras}")
-        #                 else:
-        #                     print(f"[transform_data] Error en consulta listas negras - Status: {response.status_code}")
-        #                     resultado_listas_negras = {
-        #                         "error": f"Error HTTP {response.status_code}",
-        #                         "status_code": response.status_code
-        #                     }
-                            
-        #         except httpx.TimeoutException:
-        #             print(f"[transform_data] Timeout en consulta listas negras")
-        #             resultado_listas_negras = {"error": "Timeout en consulta listas negras"}
-        #         except Exception as lista_error:
-        #             print(f"[transform_data] Error consultando listas negras: {str(lista_error)}")
-        #             resultado_listas_negras = {"error": f"Error consultando listas negras: {str(lista_error)}"}
-        #     else:
-        #         print(f"[transform_data] No se pudo extraer apellido para consulta listas negras")
-        #         resultado_listas_negras = {"error": "No se pudo extraer apellido del modelo de INE"}
-                
-        # except Exception as listas_negras_error:
-        #     print(f"[transform_data] Error general en consulta listas negras: {str(listas_negras_error)}")
-        #     resultado_listas_negras = {"error": f"Error general en consulta listas negras: {str(listas_negras_error)}"}
 
     except Exception as e:
         print(f"[transform_data] Error procesando documento: {e}")
@@ -931,6 +1054,10 @@ async def approve_user(context: dict, config: dict) -> dict:
     resultado_llm = dynamic_props.get("resultado_llm_ordena_pdf", {})
     campos_a_marcar_pdf = dynamic_props.get("campos_a_marcar_pdf", [])
     
+    # Debug: verificar qué está llegando del modelo dinámico
+    print(f"[APPROVE_USER - DEBUG] campos_a_marcar_pdf recibido: {campos_a_marcar_pdf}")
+    print(f"[APPROVE_USER - DEBUG] Tipo: {type(campos_a_marcar_pdf)}, Longitud: {len(campos_a_marcar_pdf) if campos_a_marcar_pdf else 0}")
+    
     #llamada a geminis
     
     # Ahora invocar GEMINIS para anotar el PDF con OCR
@@ -943,8 +1070,23 @@ async def approve_user(context: dict, config: dict) -> dict:
                 print("[APPROVE_USER] ADVERTENCIA: Servicio GEMINIS no disponible")
                 raise Exception("Servicio GEMINIS no disponible")
                             
-            # Preparar valores para anotar basados en el resultado del LLM
-            valores_para_anotar = campos_a_marcar_pdf
+            # Inicializar valores para anotar como lista vacía
+            valores_para_anotar = []
+            
+            # Preparar valores para anotar basados en el resultado del modelo dinámico
+            if campos_a_marcar_pdf and isinstance(campos_a_marcar_pdf, list):
+                # Filtrar objetos con texto vacío o None del modelo dinámico
+                campos_filtrados = [
+                    campo for campo in campos_a_marcar_pdf 
+                    if campo.get("text") and campo.get("text").strip()
+                ]
+                valores_para_anotar.extend(campos_filtrados)
+                print(f"[APPROVE_USER] Agregados {len(campos_filtrados)} valores del modelo dinámico (filtrados de {len(campos_a_marcar_pdf)} originales)")
+                
+                # Debug: mostrar objetos filtrados
+                objetos_filtrados = len(campos_a_marcar_pdf) - len(campos_filtrados)
+                if objetos_filtrados > 0:
+                    print(f"[APPROVE_USER] Se filtraron {objetos_filtrados} objetos con texto vacío del modelo dinámico")
                             
             # Extraer textos encontrados por el LLM para anotar en el PDF
             for seccion, datos in resultado_llm.items():
@@ -961,18 +1103,121 @@ async def approve_user(context: dict, config: dict) -> dict:
                                     "marker_side": "right"
                                 })
                             
-            # Si no hay valores específicos, usar algunos genéricos
+            # Si no hay valores específicos del modelo dinámico ni del LLM, usar algunos de ejemplo para pruebas
             if not valores_para_anotar:
-                # Agregar algunos valores comunes que podrían estar en documentos
-                # valores_para_anotar = [
-                #     {"text": "RFC", "very_permissive": True, "marker": "RFC"},
-                #     {"text": "CURP", "very_permissive": True, "marker": "CURP"},
-                #     {"text": "INE", "very_permissive": True, "marker": "INE"}
-                # ]
+                print("[APPROVE_USER] ADVERTENCIA: No se encontraron valores del modelo dinámico, usando valores de ejemplo")
                 valores_para_anotar = [{'text': 'THE CHEMOURS COMPANY SERVICIOS, S. DE R.L. DE C.V.', 'very_permissive': False}, {'text': 'CSE140703QV7', 'very_permissive': False}, {'text': '2014/06/20', 'very_permissive': False}, {'text': 'GONZALEZ MARTINEZ, LUIS OSVALDO', 'very_permissive': False}, {'text': '55 5125 4847', 'very_permissive': False}, {'text': 'luis-osvaldo.gonzalez@chemours.com', 'very_permissive': False}, {'text': 'SERGIO RAUL SANMIGUEL GASTELUM', 'very_permissive': False, 'marker': 'PRESIDENTE'}, {'text': 'LUIS OSVALDO GONZALEZ MARTINEZ', 'very_permissive': False, 'marker': 'MIEMBRO PROPIETARIO'}, {'text': 'OMAR GOMEZ VELASCO', 'very_permissive': False, 'marker': 'MIEMBRO PROPIETARIO'}, {'text': 'SOCIEDAD DE RESPONSABILIDAD LIMITADA DE CAPITAL VARIABLE', 'very_permissive': False}, {'text': '03 DE JULIO DE 2014', 'very_permissive': False}, {'text': 'ACTIVO', 'very_permissive': False}, {'text': 'SNGSSR68110214H901', 'very_permissive': False}, {'text': '2012', 'very_permissive': False}, {'text': 'GNMRLS75010615H400', 'very_permissive': False}, {'text': '2019', 'very_permissive': False}, {'text': 'CLLE LAGO ZURICH 219 INT 205 AMPLIACION GRANADA MIGUEL HIDALGO CIUDAD DE MEXICO 11529 MEX', 'very_permissive': False}, {'text': 'LUIS REBOLLAR GONZALEZ', 'very_permissive': False, 'marker': 'Presidente'}, {'text': 'JAIME PEREZ VARGAS UHTHOFF', 'very_permissive': False, 'marker': 'Miembro Propietario'}, {'text': '517312', 'very_permissive': False, 'marker': 'RPP'}]
                             
+            #agregar al arreglo de valores_para_anotar
+           
+           
+            #ayudame a generar una variable con el texto: "SE VALIDO EN QUIEN ES QUIEN E INTERNET, VALIDO MIRAI 15 AGOSTO 2025 2:06PM"
+            now = datetime.now()
+            fecha_hora = now.strftime("%d %B %Y %I:%M%p")
+            marcaValidacion = f"SE VALIDO EN QUIEN ES QUIEN E INTERNET, VALIDO MIRAI {fecha_hora.upper()}"
+           
+            cabecera492 =  {
+                "text": marcaValidacion,
+                "very_permissive": True,
+                "markerText": marcaValidacion,  # Usar markerText para mostrar el contenido de la validación
+                "marker_side": "right",  # Cambiar a right para mejor visibilidad
+                "page": 1,
+                "color": "rosa",  # Cambiar a rosa para distinguir mejor
+                # Simplificar propiedades - quitar las que pueden causar conflicto
+            }
+           
+            data = context.get("dynamic_properties", {})
+    
+            dataIne = data["resultado_validacion_ine"]["resultado_ine"]
+            paginaIne = data["paginaIneApoderado"]["paginaIneApoderado"]
+            
+            # Debug: verificar datos del INE
+            print(f"[APPROVE_USER - DEBUG] dataIne: {dataIne}")
+            print(f"[APPROVE_USER - DEBUG] paginaIne: {paginaIne}")
+            
+            parrafoIne = "\n".join([f"{clave}: {valor}" for clave, valor in dataIne.items()])
+            
+            # Debug: verificar texto generado
+            print(f"[APPROVE_USER - DEBUG] parrafoIne generado: {parrafoIne}")
+            
+            # PASO NUEVO: Marcar el PDF con el párrafo del INE antes de usar GEMINIS
+            try:
+                from app.utils.marcarPDF import MarcadorPDF
+                
+                print(f"[APPROVE_USER] Marcando página {paginaIne} con información del INE...")
+                
+                # Crear instancia del marcador
+                marcador = MarcadorPDF(bucket_name="perdidas-totales-pruebas")
+                
+                # Marcar la página específica con la información del INE
+                resultado_marcado_ine = marcador.marcar_pagina_especifica_gcs(
+                    gcs_uri=gcs_uri,
+                    pagina_numero=paginaIne,  # Usar la página exacta donde está el INE
+                    texto_parrafo=parrafoIne,
+                    posicion="derecha_centro",
+                    font_size=8,
+                    destino_folder=f"procesos/{dynamic_props.get('uuid_proceso', 'uuid_default')}/marcados"
+                )
+                
+                if resultado_marcado_ine["success"]:
+                    print(f"[APPROVE_USER] ✓ PDF marcado con info INE: {resultado_marcado_ine['uri_marcado']}")
+                    print(f"[APPROVE_USER] ✓ Texto agregado: {resultado_marcado_ine['texto_agregado']}")
+                    
+                    # Actualizar el gcs_uri para usar el PDF marcado en GEMINIS
+                    gcs_uri_original = gcs_uri
+                    gcs_uri = resultado_marcado_ine['uri_marcado']
+                    
+                    print(f"[APPROVE_USER] → Usando PDF marcado para GEMINIS: {gcs_uri}")
+                    
+                else:
+                    print(f"[APPROVE_USER] ⚠ Error marcando PDF con info INE: {resultado_marcado_ine.get('error', 'Error desconocido')}")
+                    print(f"[APPROVE_USER] → Continuando con PDF original")
+                    
+            except Exception as marcado_ine_error:
+                print(f"[APPROVE_USER] ⚠ Error en marcado INE: {str(marcado_ine_error)}")
+                print(f"[APPROVE_USER] → Continuando con PDF original")
+
+           
+            marcaIne = {
+                "text": parrafoIne,
+                "very_permissive": True,
+                "markerText": parrafoIne,  # Usar markerText para mostrar el contenido del párrafo INE
+                "marker_side": "right",
+                "page": paginaIne,
+                "color": "rosa",  # Cambiar a rosa para distinguir mejor
+                # Simplificar propiedades - quitar las que pueden causar conflicto
+            }
+           
+
+            # Crear también versiones simplificadas para asegurar visibilidad
+            cabecera492_simple = {
+                "text": marcaValidacion,
+                "very_permissive": False,
+                "marker": "VALID",
+            }
+            
+            marcaIne_simple = {
+                "text": parrafoIne,
+                "very_permissive": False,
+                "marker": "parrafoIne",
+            }
+
+            valores_para_anotar.extend([
+               cabecera492,
+               marcaIne,
+               cabecera492_simple,  # Agregar versiones simplificadas
+               marcaIne_simple
+            ])
+
+            # Debug: mostrar los últimos elementos agregados
+            print(f"[APPROVE_USER - DEBUG] cabecera492 agregado: {cabecera492}")
+            print(f"[APPROVE_USER - DEBUG] marcaIne agregado: {marcaIne}")
+            print(f"[APPROVE_USER - DEBUG] cabecera492_simple agregado: {cabecera492_simple}")
+            print(f"[APPROVE_USER - DEBUG] marcaIne_simple agregado: {marcaIne_simple}")
+            print(f"[APPROVE_USER - DEBUG] Total final de valores: {len(valores_para_anotar)}")
+
             print(f"[APPROVE_USER] Anotando {len(valores_para_anotar)} valores con GEMINIS")
-                            
+
             # Llamar a GEMINIS de forma síncrona
             geminis_result = process_pdf_with_geminis(
                 pdf_uri=gcs_uri,
@@ -981,7 +1226,7 @@ async def approve_user(context: dict, config: dict) -> dict:
                 options={
                     "mode": "highlight",
                     "lang": "spa",
-                    "min_score": 85,
+                    "min_score": 70,  # Reducir score mínimo para ser más permisivo
                     "first_only": False
                 }
             )
@@ -1052,9 +1297,65 @@ async def approve_user(context: dict, config: dict) -> dict:
     
     ################################################# no borrar despues de aqui
     #respuesta actual
+    # Marcar workflow como completado
+    data = context.get("dynamic_properties", {})
+    expedienteCompleto = data.get("expedienteCompleto", "")
+    expedienteConCargaCompleta = data.get("expedienteConCargaCompleta", False)
+
+    if execution_id:
+        try:
+            # Determinar el estado final basándose en si el expediente está completo
+            final_status = "completed" if expedienteConCargaCompleta else "completed_with_issues"
+            workflow_message = "Expediente procesado exitosamente" if expedienteConCargaCompleta else "Expediente procesado con documentos faltantes"
+            
+            # Reportar el step final con información completa
+            await report_completion(execution_id, "workflow_final", {
+                "success": True,
+                "workflow_completed": True,
+                "final_status": final_status,
+                "expediente_completo": expedienteConCargaCompleta,
+                "expediente_detalle": expedienteCompleto,
+                "pdf_anotado_disponible": pdf_anotado_uri is not None,
+                "pdf_anotado_uri": pdf_anotado_uri,
+                "procesamiento_completo": True,
+                "workflow_message": workflow_message,
+                "step_is_final": True  # Flag para indicar que este es el último step
+            })
+            
+            # Intentar marcar workflow como completado (opcional - no crítico si falla)
+            try:
+                workflow_completed = await complete_workflow_execution(execution_id, "completed")
+                if workflow_completed:
+                    print(f"[APPROVE_USER] ✓ Workflow {execution_id} marcado como completado en Discovery")
+                else:
+                    print(f"[APPROVE_USER] ⚠ No se pudo marcar workflow como completado, pero el procesamiento fue exitoso")
+            except Exception as workflow_optional_error:
+                print(f"[APPROVE_USER] ⚠ Error opcional marcando workflow: {workflow_optional_error}")
+            
+            print(f"[APPROVE_USER] ✓ Procesamiento completado para execution_id: {execution_id}")
+            print(f"[APPROVE_USER] ✓ Estado del expediente: {expedienteCompleto}")
+            
+        except Exception as workflow_error:
+            print(f"[APPROVE_USER] Error en finalización de workflow: {workflow_error}")
+
     return {
-        "context": new_context
+        "context": new_context,
+        # NO agregar "next" para indicar que es el final del workflow
+        "workflow_status": "completed",
+        "workflow_completed": True,  # Flag explícito para Discovery
+        "final_workflow_state": True,  # Indicador adicional
+        "expediente_status": {
+            "completo": expedienteConCargaCompleta,
+            "detalle": expedienteCompleto
+        },
+        "final_step": True,  # Indicar explícitamente que este es el último step
+        "completion_data": {
+            "pdf_anotado_uri": pdf_anotado_uri,
+            "final_status": final_status,
+            "processing_summary": workflow_message
+        }
     }
+    
 
 @register("reject_user")
 async def reject_user(context: dict, config: dict) -> dict:
@@ -1066,78 +1367,18 @@ async def reject_user(context: dict, config: dict) -> dict:
     # print(data)
     
     documents = data["resultado_llm_extraccion_data"]["documents"]
-
-    # # Buscar el documento deseado
-    # valor = None
-    # for doc in documents:
-    #     if doc["name"] == "Formato conoce a tu cliente PERSONA MORAL MEXICANA":
-    #         valor = doc["fields"].get("NOMBRE_DEL_ADMINISTRADOR_UNICO_O_DIRECTOR_GENERAL_APODERADO_QUIEN_DEBERA_FIRMAR_EL_FORMATO")
-    #         break
-
-    # # print(valor)
-    # # Separar por la coma
-    # partes = valor.split(",")
-
-    # # Limpiar y convertir a minúsculas
-    # apellidos = partes[0].strip().lower()
-    # nombres = partes[1].strip().lower()
-
-    # print("apellidos =", apellidos)
-    # print("nombres =", nombres)
     
-    # # Ejecutar búsqueda de antecedentes
-    # redesSociales = await screen_person("Joaquín Archivaldo Guzmán Loera", location="México", topk=5)
+    execution_id = context.get("execution_id") or context.get("dynamic_properties", {}).get("execution_id")
+
+    
+    await report_completion(execution_id, "approve_user", {
+                    "success": True,
+                    "validacion_final": "Formato Generado",
+                    # "pdf_anotado_disponible": pdf_anotado_uri is not None,
+                    # "pdf_anotado_signed_url_generada": pdf_anotado_signed_url is not None
+                })
     
     
-    #         # Consultar listas negras con el apellido extraído del modelo de INE (independiente de la validación de INE)
-    # try:
-    #     # apellido = resultado_llm.get("resultado", {}).get("apellido", "")
-    #     # apellido = "Guzman"
-    #     # apellido = "Joaquin Archivaldo"
-    #     # apellido = "Guzman Loera"
-    #     apellido = "Guevara Espindola"
-            
-    #     if apellido:
-    #         print(f"[transform_data] Consultando listas negras para apellido: {apellido}")
-                
-    #         # if execution_id:
-    #         #     await report_progress(execution_id, "transform_data", {
-    #         #         "percentage": 75,
-    #         #         "message": "Consultando listas negras",
-    #         #         "current_task": f"Verificando apellido {apellido}"
-    #         #     })
-                
-    #         try:
-    #             async with httpx.AsyncClient(timeout=30) as client:
-    #                 response = await client.post(
-    #                     "https://valuacion.aseguradoradigital.com.mx/api/services/app/Consultas/BuscarEnListasNegras",
-    #                     json={"nombre": f"%{apellido}%"},
-    #                     headers={"Content-Type": "application/json"}
-    #                 )
-                        
-    #                 if response.status_code == 200:
-    #                     resultado_listas_negras = response.json()
-    #                     print(f"[transform_data] Resultado listas negras: {resultado_listas_negras}")
-    #                 else:
-    #                     print(f"[transform_data] Error en consulta listas negras - Status: {response.status_code}")
-    #                     resultado_listas_negras = {
-    #                         "error": f"Error HTTP {response.status_code}",
-    #                         "status_code": response.status_code
-    #                     }
-                            
-    #         except httpx.TimeoutException:
-    #             print(f"[transform_data] Timeout en consulta listas negras")
-    #             resultado_listas_negras = {"error": "Timeout en consulta listas negras"}
-    #         except Exception as lista_error:
-    #             print(f"[transform_data] Error consultando listas negras: {str(lista_error)}")
-    #             resultado_listas_negras = {"error": f"Error consultando listas negras: {str(lista_error)}"}
-    #     else:
-    #         print(f"[transform_data] No se pudo extraer apellido para consulta listas negras")
-    #         resultado_listas_negras = {"error": "No se pudo extraer apellido del modelo de INE"}
-                
-    # except Exception as listas_negras_error:
-    #     print(f"[transform_data] Error general en consulta listas negras: {str(listas_negras_error)}")
-    #     resultado_listas_negras = {"error": f"Error general en consulta listas negras: {str(listas_negras_error)}"}
     
     
     
