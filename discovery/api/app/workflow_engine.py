@@ -66,7 +66,7 @@ class PioneerClient:
             "fetch_user": 600,      # 5 minutos - procesamiento de documentos
             "validate_user": 600,   # 4 minutos - OCR y extracción de datos
             "transform_data": 600,  # 3 minutos - validación de INE
-            "approve_user": 600,    # 3.3 minutos - anotación con GEMINIS
+            "approve_user": 990,    # 3.3 minutos - anotación con GEMINIS
             "default": 700          # 2 minutos por defecto
         }
         
