@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, select, func
 from .database import SessionLocal, engine, Base
 from . import crud, schemas, models, workflow_engine, websocket
-import uvicorn, asyncio, logging
+import uvicorn, asyncio, logging, datetime
 
 import app.steps_builtin  # ← esto activa el registro de steps
 
@@ -557,6 +557,79 @@ async def mark_step_completed(
         "step_name": step_name,
         "completion_recorded": result or {}
     }
+
+@app.post("/discovery/executions/{exec_id}/complete")
+async def complete_workflow_execution(
+    exec_id: str,
+    completion_data: dict = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Marca manualmente una ejecución de workflow como completada.
+    Este endpoint permite que services externos (como Pioneer) 
+    marquen workflows como finalizados cuando todos los steps han terminado exitosamente.
+    
+    Body example:
+    {
+        "forced_completion": true,
+        "completion_reason": "All steps completed successfully", 
+        "final_data": {"total_steps": 4, "success": true},
+        "completed_by": "pioneer_service"
+    }
+    """
+    # Buscar la ejecución
+    exec_obj = await db.get(models.DiscoveryWorkflowExecution, exec_id)
+    if not exec_obj:
+        raise HTTPException(404, "Ejecución no encontrada")
+    
+    # Verificar que no esté ya en estado final
+    if exec_obj.status in [models.ExecStatus.completed, models.ExecStatus.failed]:
+        return {
+            "status": "already_completed",
+            "execution_id": exec_id,
+            "current_status": exec_obj.status.value,
+            "message": f"Workflow ya está en estado final: {exec_obj.status.value}"
+        }
+    
+    # Marcar como completado
+    exec_obj.status = models.ExecStatus.completed
+    exec_obj.current_step_id = None  # Resetear el step actual
+    
+    # Agregar datos de finalización al contexto si se proporcionan
+    if completion_data:
+        if not exec_obj.context:
+            exec_obj.context = {}
+        exec_obj.context["completion_data"] = completion_data
+        exec_obj.context["completed_at"] = datetime.datetime.utcnow().isoformat()
+        
+        # CRÍTICO: Marcar el campo JSON como modificado para SQLAlchemy
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(exec_obj, 'context')
+    
+    # Persistir cambios
+    await db.commit()
+    
+    # Notificar via WebSocket
+    await websocket.broadcaster(str(exec_id), {
+        "event": "workflow_completed",
+        "execution_id": exec_id,
+        "completion_reason": "manual_completion",
+        "final_status": "completed",
+        "completed_at": datetime.datetime.utcnow().isoformat(),
+        "completion_data": completion_data or {}
+    })
+    
+    logger.info(f"Workflow {exec_id} marcado como completado manualmente")
+    
+    return {
+        "status": "success",
+        "execution_id": exec_id,
+        "new_status": "completed",
+        "message": "Workflow marcado como completado exitosamente",
+        "completion_data": completion_data or {},
+        "completed_at": datetime.datetime.utcnow().isoformat()
+    }
+
 
 # ---------- WebSocket ----------
 @app.websocket("/discovery/ws/{exec_id}")

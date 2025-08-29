@@ -354,6 +354,140 @@ async def mark_step_completed(exec_id: str, step_name: str, result_data: dict = 
     finally:
         if close_db:
             await db.close()
+            
+
+async def check_workflow_completion(db: AsyncSession, exec_obj: DiscoveryWorkflowExecution) -> bool:
+    """
+    Verifica si un workflow debería estar marcado como completado.
+    
+    Un workflow se considera completo cuando:
+    1. Está en estado "running"
+    2. El último step ejecutado fue exitoso
+    3. No hay un "next_step_name" en el contexto (indica final de flujo)
+    4. O cuando el step actual es uno de los steps finales conocidos
+    
+    Args:
+        db: Sesión de base de datos
+        exec_obj: Objeto de ejecución del workflow
+        
+    Returns:
+        True si el workflow debería estar completo, False en caso contrario
+    """
+    if exec_obj.status != ExecStatus.running:
+        return False
+    
+    # Obtener el último step ejecutado
+    stmt = (
+        select(DiscoveryStepExecution, DiscoveryStep)
+        .join(DiscoveryStep)
+        .where(DiscoveryStepExecution.execution_id == exec_obj.id)
+        .order_by(DiscoveryStepExecution.started_at.desc())
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    last_execution = result.first()
+    
+    if not last_execution:
+        return False
+    
+    last_step_exec, last_step = last_execution
+    
+    # El último step debe haber sido exitoso
+    if last_step_exec.status != StepStatus.success:
+        return False
+    
+    # Verificar si no hay siguiente step programado
+    next_step_name = exec_obj.context.get("next_step_name")
+    if not next_step_name:
+        logger.info(f"[COMPLETION_CHECK] No hay next_step_name - workflow {exec_obj.id} debería completarse")
+        return True
+    
+    # Verificar si el step actual es uno de los steps finales conocidos
+    final_steps = ["approve_user", "reject_user", "Aprobar Usuario", "Rechazar Usuario"]
+    if last_step.name in final_steps:
+        logger.info(f"[COMPLETION_CHECK] Step final detectado: {last_step.name} - workflow {exec_obj.id} debería completarse")
+        return True
+    
+    # Si hay next_step_name, verificar si el step existe en el workflow
+    if next_step_name:
+        # Mapeo inverso de handlers a nombres de steps en la BD
+        handler_to_step_mapping = {
+            "fetch_user": "Carga Usuario",
+            "validate_user": "Validación Usuario", 
+            "transform_data": "Transformación",
+            "decide": "Decisión",
+            "approve_user": "Aprobar Usuario",
+            "reject_user": "Rechazar Usuario"
+        }
+        
+        step_db_name = handler_to_step_mapping.get(next_step_name, next_step_name)
+        
+        stmt_next = (
+            select(DiscoveryStep)
+            .where(
+                DiscoveryStep.workflow_id == exec_obj.workflow_id,
+                DiscoveryStep.name == step_db_name
+            )
+        )
+        next_step = (await db.execute(stmt_next)).scalar_one_or_none()
+        
+        if not next_step:
+            logger.info(f"[COMPLETION_CHECK] Next step '{next_step_name}' no existe - workflow {exec_obj.id} debería completarse")
+            return True
+    
+    return False
+
+
+async def auto_complete_workflow_if_needed(db: AsyncSession, exec_obj: DiscoveryWorkflowExecution):
+    """
+    Verifica automáticamente si un workflow debería completarse y lo marca como completo si es necesario.
+    
+    Args:
+        db: Sesión de base de datos
+        exec_obj: Objeto de ejecución del workflow
+    """
+    should_complete = await check_workflow_completion(db, exec_obj)
+    
+    if should_complete:
+        logger.info(f"[AUTO_COMPLETE] Marcando workflow {exec_obj.id} como completado automáticamente")
+        
+        # Marcar como completado
+        exec_obj.status = ExecStatus.completed
+        exec_obj.current_step_id = None
+        
+        # Agregar información de completación automática al contexto
+        if not exec_obj.context:
+            exec_obj.context = {}
+        exec_obj.context["auto_completed"] = True
+        exec_obj.context["completed_at"] = datetime.datetime.utcnow().isoformat()
+        exec_obj.context["completion_reason"] = "automatic_detection"
+        
+        # CRÍTICO: Marcar el campo JSON como modificado para SQLAlchemy
+        flag_modified(exec_obj, 'context')
+        
+        # Persistir cambios
+        await db.commit()
+        
+        # Notificar via WebSocket
+        safe_context = create_websocket_safe_context(exec_obj.context)
+        await broadcaster(str(exec_obj.id), {
+            "event": "workflow_completed",
+            "execution_id": str(exec_obj.id),
+            "final_context": safe_context,
+            "completion_reason": "automatic_detection",
+            "summary": {
+                "total_steps_executed": len([k for k in safe_context.get('dynamic_properties', {}).keys() if 'step_' in k]),
+                "completion_time": datetime.datetime.utcnow().isoformat(),
+                "has_pdf": safe_context.get('dynamic_properties', {}).get('pdf_reordenado_disponible', False),
+                "document_name": safe_context.get('dynamic_properties', {}).get('nombre_documento', 'Unknown')
+            }
+        })
+        
+        logger.info(f"[AUTO_COMPLETE] Workflow {exec_obj.id} completado automáticamente")
+        return True
+    
+    return False
+
 
 
 async def run_next_step(db: AsyncSession, exec_obj: DiscoveryWorkflowExecution):
@@ -625,6 +759,13 @@ async def run_next_step(db: AsyncSession, exec_obj: DiscoveryWorkflowExecution):
             "timestamp": datetime.datetime.utcnow().isoformat()
         }
     })
+    
+        # 8.5) Verificar si el workflow debería completarse automáticamente
+    if exec_obj.status == ExecStatus.running and step_exec.status == StepStatus.success:
+        workflow_completed = await auto_complete_workflow_if_needed(db, exec_obj)
+        if workflow_completed:
+            logger.info(f"[RUN_NEXT_STEP] Workflow {exec_obj.id} completado automáticamente - no continuará recursión")
+            return step
 
     # 9) Recurse si es automático
     if exec_obj.mode == Mode.automatic and exec_obj.status == ExecStatus.running:
