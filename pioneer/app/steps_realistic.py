@@ -787,24 +787,6 @@ async def transform_data(context: dict, config: dict) -> dict:
         resultado_listas_negras = {"error": f"Error general en consulta listas negras: {str(listas_negras_error)}"}
     
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     if execution_id:
         await report_progress(execution_id, "transform_data", {
             "percentage": 10,
@@ -935,6 +917,7 @@ async def transform_data(context: dict, config: dict) -> dict:
     
     return {
         "context": new_context,
+        "next": "decide"
          # Sigue por orden (no especificamos `next`)
     }
     
@@ -1324,7 +1307,10 @@ async def approve_user(context: dict, config: dict) -> dict:
             
             # Intentar marcar workflow como completado (opcional - no crítico si falla)
             try:
-                workflow_completed = await complete_workflow_execution(execution_id, "completed")
+                if expedienteConCargaCompleta:
+                    workflow_completed = await complete_workflow_execution(execution_id, "completed")
+                else:
+                    workflow_completed = await complete_workflow_execution(execution_id, "failed")
                 if workflow_completed:
                     print(f"[APPROVE_USER] ✓ Workflow {execution_id} marcado como completado en Discovery")
                 else:

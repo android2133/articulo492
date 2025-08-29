@@ -83,6 +83,11 @@ def reorder_pdf_sections(
             continue
         start = ini - 1 if one_indexed else ini
         end = fin - 1 if one_indexed else fin
+        
+        # Para comprobante_domicilio, solo tomar la primera página
+        if name == "comprobante_domicilio":
+            end = start
+        
         if 0 <= start <= end < num_pages:
             spans[name] = (start, end)
 
