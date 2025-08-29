@@ -47,8 +47,15 @@ VALUES: List[str] = [
     {
         "text": """A).- Poder general para pleitos y cobranzas, de acuerdo con el párrafo Primero del artículo dos mil trescientos ochenta y cuatro del Código Civil para el Estado de San Luis Potosí, su correlativo el dos mil quinientos cincuenta y cuatro del Código Civil para el Distrito Federal en materia común y para toda la República en materia federal y sus correlativos de los Estados del resto de la República, con todas las facultades generales y las especiales que requieran poder o cláusula especia.-""",
         "very_permissive": True,
-        "marker": "P",             # o "*"
-        "marker_side": "left"     # o "left"right
+        "marker": "P",
+        "marker_side": "left",
+        # Opciones avanzadas:
+        # "markerText": "PODER GENERAL\nPLEITOS Y COBRANZAS\nArt. 2384 CC SLP",  # texto multilinea
+        # "page": 1,  # página específica donde colocar el marcador
+        # "markPositionHorizontal": "left",  # "left", "center", "right" para marcadores independientes
+        # "markPositionVertical": "top",     # "top", "mid", "bottom" para marcadores independientes
+        # "color": "amarillo",               # "amarillo" o "rosa"
+        # "coordinates": {"x": 100, "y": 200, "width": 150, "height": 50}  # coordenadas exactas opcionales
     }
 ]
 
@@ -535,11 +542,16 @@ def annotate(page: fitz.Page, rects: List[fitz.Rect], mode: str = "underline"):
             continue
         try:
             if mode == "highlight":
-                page.add_highlight_annot(r)
+                annot = page.add_highlight_annot(r)
             elif mode == "squiggly":
-                page.add_squiggly_annot(r)
+                annot = page.add_squiggly_annot(r)
             else:
-                page.add_underline_annot(r)
+                annot = page.add_underline_annot(r)
+            
+            # Marcar como imprimible para que aparezca al hacer flatten o imprimir
+            if annot:
+                annot.set_flags(fitz.ANNOT_PRINT)
+                annot.update()
         except Exception:
             # si PyMuPDF se queja por algún rect, seguimos con los demás
             continue
@@ -814,21 +826,152 @@ def process_pdf(pdf_path: str,
 
     from typing import Any
 
+    def _get_color_rgb(color_name: str) -> Tuple[float, float, float]:
+        """Convierte nombre de color a RGB."""
+        colors = {
+            "amarillo": (1.0, 0.92, 0.23),  # amarillo marcatexto
+            "rosa": (1.0, 0.75, 0.85)       # rosa suave
+        }
+        return colors.get(color_name, (1.0, 0.92, 0.23))  # default amarillo
+
+    def _get_page_position(page: fitz.Page, 
+                          h_pos: str = "right", 
+                          v_pos: str = "mid", 
+                          box_width: float = 150, 
+                          box_height: float = 50) -> fitz.Rect:
+        """
+        Calcula posición en la página según posicionamiento horizontal y vertical.
+        """
+        page_w = page.rect.width
+        page_h = page.rect.height
+        margin = 20  # margen desde los bordes
+        
+        # Posición horizontal
+        if h_pos == "left":
+            x0 = margin
+        elif h_pos == "center":
+            x0 = (page_w - box_width) / 2
+        else:  # "right"
+            x0 = page_w - box_width - margin
+            
+        # Posición vertical  
+        if v_pos == "top":
+            y0 = margin
+        elif v_pos == "bottom":
+            y0 = page_h - box_height - margin
+        else:  # "mid"
+            y0 = (page_h - box_height) / 2
+            
+        return fitz.Rect(x0, y0, x0 + box_width, y0 + box_height)
+
+    def _add_text_block(page: fitz.Page,
+                       text: str,
+                       rect: fitz.Rect,
+                       color_rgb: Tuple[float, float, float] = (1.0, 0.92, 0.23),
+                       background: bool = True,
+                       fontsize: float = 12) -> None:
+        """
+        Agrega un bloque de texto con formato básico en la posición especificada.
+        Maneja texto multilinea y auto-ajusta el tamaño de fuente si es necesario.
+        """
+        try:
+            # Fondo si se requiere
+            if background:
+                sh = page.new_shape()
+                try:
+                    sh.draw_round_rect(rect, 3.0)  # esquinas redondeadas
+                except Exception:
+                    sh.draw_rect(rect)
+                sh.finish(color=None, fill=color_rgb, width=0)
+                sh.commit()
+            
+            # Calcular tamaño de fuente apropiado para el texto
+            lines = text.splitlines() if text else [""]
+            if lines:
+                # Ajustar tamaño de fuente basado en número de líneas y ancho del texto
+                max_lines = max(1, len(lines))
+                available_height = rect.height - 8  # margen
+                max_font_height = available_height / max_lines
+                
+                # Limitar tamaño de fuente
+                adjusted_fontsize = min(fontsize, max_font_height, 20)
+                adjusted_fontsize = max(adjusted_fontsize, 8)  # mínimo legible
+            else:
+                adjusted_fontsize = fontsize
+            
+            # Texto
+            page.insert_textbox(
+                rect, 
+                text,
+                fontsize=adjusted_fontsize,
+                fontname="helv",
+                color=(0, 0, 0) if background else color_rgb,
+                align=fitz.TEXT_ALIGN_LEFT
+            )
+        except Exception as e:
+            print(f"Error agregando bloque de texto: {e}")
+            # Fallback: al menos intenta agregar texto simple sin formato
+            try:
+                page.insert_textbox(rect, text or "", fontsize=10, fontname="helv")
+            except Exception:
+                pass  # Si todo falla, continúa sin el bloque de texto
+
     def _coerce_values_list(vals) -> List[Dict[str, Any]]:
         """
-        Normaliza 'values' a una lista de dicts:
-        {'text': str, 'very_permissive': bool, 'marker': Optional[str], 'marker_side': Optional[str]}
+        Normaliza 'values' a una lista de dicts con todas las propiedades soportadas:
+        {
+            'text': str, 
+            'very_permissive': bool, 
+            'marker': Optional[str], 
+            'marker_side': Optional[str],
+            'page': Optional[int],
+            'markerText': Optional[str],
+            'markPositionHorizontal': Optional[str],
+            'markPositionVertical': Optional[str], 
+            'color': Optional[str],
+            'coordinates': Optional[dict]
+        }
         """
         norm = []
         for v in vals:
             if isinstance(v, str):
-                norm.append({"text": v, "very_permissive": False, "marker": None, "marker_side": None})
+                norm.append({
+                    "text": v, 
+                    "very_permissive": False, 
+                    "marker": None, 
+                    "marker_side": None,
+                    "page": None,
+                    "markerText": None,
+                    "markPositionHorizontal": None,
+                    "markPositionVertical": None,
+                    "color": None,
+                    "coordinates": None
+                })
             elif isinstance(v, dict) and "text" in v:
+                # Validar y normalizar posiciones
+                h_pos = (v.get("markPositionHorizontal") or "").lower()
+                if h_pos not in ("left", "center", "right"):
+                    h_pos = None
+                    
+                v_pos = (v.get("markPositionVertical") or "").lower()
+                if v_pos not in ("top", "mid", "bottom"):
+                    v_pos = None
+                    
+                color = (v.get("color") or "").lower()
+                if color not in ("amarillo", "rosa"):
+                    color = None
+                    
                 norm.append({
                     "text": v["text"],
                     "very_permissive": bool(v.get("very_permissive", False)),
                     "marker": v.get("marker"),  # "P" o "*"
-                    "marker_side": (v.get("marker_side") or "").lower() if v.get("marker_side") else None
+                    "marker_side": (v.get("marker_side") or "").lower() if v.get("marker_side") else None,
+                    "page": int(v["page"]) if v.get("page") is not None else None,
+                    "markerText": v.get("markerText"),
+                    "markPositionHorizontal": h_pos,
+                    "markPositionVertical": v_pos,
+                    "color": color,
+                    "coordinates": v.get("coordinates") if isinstance(v.get("coordinates"), dict) else None
                 })
             # entradas inválidas se ignoran
         return norm
@@ -847,72 +990,91 @@ def process_pdf(pdf_path: str,
                          side: str = "right",
                          color_rgb: Tuple[float, float, float] = (1.0, 0.92, 0.23),
                          style: str = "filled",
-                         box_pt: float = 14.0,
-                         margin_pt: float = 6.0,
-                         text_rgb: Tuple[float, float, float] = (1, 1, 1)) -> Optional[fitz.Annot]:
+                         box_pt: float = 48,
+                         margin_pt: float = 8.0,
+                         text_rgb: Tuple[float, float, float] = (0, 0, 0)) -> Optional[fitz.Annot]:
         """
-        Dibuja un marcador (FreeText annot) junto al rectángulo 'anchor'.
+        Dibuja un marcador (FreeText annot) junto al rectángulo 'anchor' con auto-ajuste de tamaño.
         - side: "left" / "right"
-        - style: "filled" -> fondo color marcatexto + texto blanco
+        - style: "filled" -> fondo color marcatexto + texto negro
                  "text"   -> sin fondo, texto del color marcatexto
+        Auto-ajusta el rect según el texto y número de líneas.
         """
-        # Caja del marcador según el centro vertical del párrafo
-        y_mid = (anchor.y0 + anchor.y1) / 2.0
-        h = box_pt
-        w = box_pt
-        y0 = y_mid - h / 2.0
-        y1 = y_mid + h / 2.0
+        # Calcular alto/ancho por líneas
+        lines = (text or "").splitlines() or [text or " "]
+        # Tamaño base de fuente: un poco menor que box_pt
+        fs = max(8.0, box_pt * 0.8)
+        
+        # Ancho máximo de línea
+        try:
+            max_w = max(fitz.get_text_length(line, fontname="helv", fontsize=fs) for line in lines)
+        except Exception:
+            max_w = max(len(line) for line in lines) * fs * 0.55
+        
+        # Alto total aproximado
+        line_h = fs * 1.25
+        h = max(box_pt, line_h * len(lines) + 6)
+        w = max(box_pt, max_w + 10)
 
+        # Centrar vertical al párrafo y posicionar a un lado
+        y_mid = (anchor.y0 + anchor.y1) / 2.0
+        y0 = y_mid - h/2
+        y1 = y_mid + h/2
+        
         if side == "left":
             x1 = anchor.x0 - margin_pt
             x0 = x1 - w
-            # si se sale por la izquierda, intentamos derecha
-            if x0 < 0:
+            if x0 < 0:  # si no cabe a la izquierda, pásalo a la derecha
                 x0 = anchor.x1 + margin_pt
                 x1 = x0 + w
-        else:  # right o cualquier otro valor
+        else:
             x0 = anchor.x1 + margin_pt
             x1 = x0 + w
-            # si se sale por la derecha, intentamos izquierda
-            if x1 > page.rect.x1:
+            if x1 > page.rect.x1:  # si no cabe a la derecha, pásalo a la izquierda
                 x1 = anchor.x0 - margin_pt
                 x0 = x1 - w
 
-        # clamp vertical a la página
+        # Clamp vertical
         if y0 < 0:
-            y1 = y1 - y0
+            y1 -= y0
             y0 = 0
         if y1 > page.rect.y1:
-            delta = y1 - page.rect.y1
-            y0 -= delta
-            y1 -= delta
+            d = y1 - page.rect.y1
+            y0 -= d
+            y1 -= d
 
         rect = fitz.Rect(x0, y0, x1, y1)
 
         try:
-            annot = page.add_freetext_annot(rect, text)
-        except Exception:
-            return None
+            # Crear FreeText
+            annot = page.add_freetext_annot(rect, text or "")
+            annot.set_flags(fitz.ANNOT_PRINT)  # <- clave para imprimir/flatten
 
-        try:
             if style == "filled":
                 annot.set_colors(stroke=color_rgb, fill=color_rgb, text=text_rgb)
                 annot.set_opacity(0.95)
                 annot.set_border(width=0.5)
-            else:  # "text"
-                annot.set_colors(stroke=color_rgb, fill=None, text=color_rgb)
+            else:
+                annot.set_colors(stroke=None, fill=None, text=color_rgb)
                 annot.set_opacity(1.0)
-                annot.set_border(width=0.0)
-            # fuente y tamaño: usa casi todo el recuadro
+                annot.set_border(width=0)
+
             try:
-                annot.set_font("helv", size=box_pt * 0.8)
+                annot.set_font("helv", size=fs)
             except Exception:
                 pass
+            
+            # Fuerza appearance con colores/tamaño
+            annot.update(
+                fontsize=fs, 
+                text_color=text_rgb if style=="filled" else color_rgb,
+                fill_color=(color_rgb if style=="filled" else None),
+                color=(color_rgb if style=="filled" else None)
+            )
             annot.update()
+            return annot
         except Exception:
-            pass
-
-        return annot
+            return None
     
     # def _add_side_marker(page: fitz.Page,
     #                  anchor: fitz.Rect,
@@ -1130,12 +1292,26 @@ def process_pdf(pdf_path: str,
                 v_text = vobj["text"]
                 v_flag = bool(vobj.get("very_permissive", False))
                 v_marker = vobj.get("marker")            # "P" / "*" / None
+                v_marker_text = vobj.get("markerText")   # Texto largo alternativo
                 v_side = (vobj.get("marker_side") or "").lower() if vobj.get("marker_side") else None
+                v_page = vobj.get("page")                # Página específica
+                v_h_pos = vobj.get("markPositionHorizontal")  # left/center/right
+                v_v_pos = vobj.get("markPositionVertical")    # top/mid/bottom
+                v_color = vobj.get("color")              # amarillo/rosa
+                v_coords = vobj.get("coordinates")       # coordenadas exactas
+                
                 if v_side not in ("left", "right"):
                     v_side = "right"  # por defecto, derecha
 
+                # Si se especifica una página, solo procesar en esa página
+                if v_page is not None and page_num != (v_page - 1):  # página 1-indexed
+                    continue
+
                 if first_only and value_done[v_text]:
                     continue
+
+                # Obtener color RGB
+                marker_color = _get_color_rgb(v_color) if v_color else highlight_rgb
 
                 matches: List[Dict] = []
 
@@ -1164,28 +1340,46 @@ def process_pdf(pdf_path: str,
 
                 # 3) Anotar y registrar resultados
                 for m in matches:
-                    # (a) subrayado / highlight palabra por palabra (tu función annotate)
-                    annotate(page, m["rects"], mode=mode)  # si quisieras colorear, añade color/opacidad en tu annotate
+                    # (a) subrayado / highlight palabra por palabra con color personalizado
+                    annotate(page, m["rects"], mode=mode)
 
-                    # (b) agrega marcador lateral si está pedido
-                    if v_marker:
+                    # (b) agrega marcador lateral o bloque de texto
+                    if v_marker or v_marker_text:
                         try:
                             anchor = _union_rect([fitz.Rect(r) for r in m["rects"]]) if m.get("rects") else None
                         except Exception:
                             anchor = None
 
                         if anchor is not None:
-                            _add_side_marker(
-                                page,
-                                anchor=anchor,
-                                text=str(v_marker),
-                                side=v_side,
-                                color_rgb=highlight_rgb,
-                                style=marker_style,
-                                box_pt=marker_box_pt,
-                                margin_pt=marker_margin_pt,
-                                text_rgb=marker_text_color
-                            )
+                            # Usar markerText si está disponible, sino usar marker simple
+                            marker_display_text = v_marker_text if v_marker_text else str(v_marker)
+                            
+                            if v_marker_text:
+                                # Para texto largo, usar marcador con auto-ajuste
+                                _add_side_marker(
+                                    page,
+                                    anchor=anchor,
+                                    text=marker_display_text,
+                                    side=v_side,
+                                    color_rgb=marker_color,
+                                    style=marker_style,
+                                    box_pt=max(marker_box_pt, 48),  # Usar el valor mejorado
+                                    margin_pt=marker_margin_pt,
+                                    text_rgb=marker_text_color
+                                )
+                            else:
+                                # Marcador simple
+                                _add_side_marker(
+                                    page,
+                                    anchor=anchor,
+                                    text=marker_display_text,
+                                    side=v_side,
+                                    color_rgb=marker_color,
+                                    style=marker_style,
+                                    box_pt=marker_box_pt,
+                                    margin_pt=marker_margin_pt,
+                                    text_rgb=marker_text_color
+                                )
 
                     # (c) guarda trazabilidad
                     results[v_text].append({
@@ -1194,12 +1388,61 @@ def process_pdf(pdf_path: str,
                         "matched_text": m.get("text", ""),
                         "rects": [list(r) for r in m.get("rects", [])],
                         "marker": v_marker,
-                        "marker_side": v_side
+                        "marker_text": v_marker_text,
+                        "marker_side": v_side,
+                        "color": v_color,
+                        "page_filter": v_page
                     })
 
                     if first_only:
                         value_done[v_text] = True
                         break  # solo el primer match para este valor en todo el doc
+
+                # 4) Agregar marcadores de posición independientes (sin búsqueda de texto)
+                if (v_marker or v_marker_text) and (v_h_pos or v_v_pos or v_coords):
+                    try:
+                        if v_coords:
+                            # Usar coordenadas exactas
+                            rect = fitz.Rect(
+                                v_coords.get("x", 100),
+                                v_coords.get("y", 100), 
+                                v_coords.get("x", 100) + v_coords.get("width", 150),
+                                v_coords.get("y", 100) + v_coords.get("height", 50)
+                            )
+                        else:
+                            # Usar posicionamiento automático
+                            rect = _get_page_position(
+                                page,
+                                h_pos=v_h_pos or "right",
+                                v_pos=v_v_pos or "mid",
+                                box_width=200 if v_marker_text else 50,
+                                box_height=100 if v_marker_text else 50
+                            )
+                        
+                        marker_display_text = v_marker_text if v_marker_text else str(v_marker)
+                        _add_text_block(
+                            page,
+                            text=marker_display_text,
+                            rect=rect,
+                            color_rgb=marker_color,
+                            background=True,
+                            fontsize=10 if v_marker_text else 16
+                        )
+                        
+                        # Registrar el marcador independiente
+                        results[v_text].append({
+                            "page": page_num,
+                            "score": 100,  # Marcador de posición
+                            "matched_text": "MARCADOR_POSICION",
+                            "rects": [list(rect)],
+                            "marker": v_marker,
+                            "marker_text": v_marker_text,
+                            "position": {"h": v_h_pos, "v": v_v_pos, "coords": v_coords},
+                            "color": v_color
+                        })
+                        
+                    except Exception as e:
+                        print(f"Error agregando marcador de posición: {e}")
 
         # Guardar PDF y JSON de trazabilidad
         doc.save(out_pdf, deflate=True)
@@ -1227,10 +1470,56 @@ def process_pdf(pdf_path: str,
 # Entrypoint (sin CLI)
 # =============================================================================
 
+# Ejemplo de uso con todas las nuevas funcionalidades:
+EJEMPLO_VALUES_COMPLETO = [
+    # Búsqueda simple con string
+    "LIC. ANTONIO MARTIN VILLALPANDO",
+    
+    # Búsqueda con marcador simple
+    {
+        "text": "PATRICIO FRANCISCO PASQUEL QUINTANA",
+        "marker": "*",
+        "marker_side": "left",
+        "color": "rosa"
+    },
+    
+    # Búsqueda muy permisiva con texto largo y página específica
+    {
+        "text": """A).- Poder general para pleitos y cobranzas...""",
+        "very_permissive": True,
+        "markerText": "PODER GENERAL\nPLEITOS Y COBRANZAS\nArt. 2384 CC SLP",
+        "marker_side": "right",
+        "page": 1,
+        "color": "amarillo"
+    },
+    
+    # Marcador de posición sin búsqueda de texto
+    {
+        "text": "MARCADOR_ESQUINA_SUPERIOR",  # texto dummy para indexar
+        "markerText": "DOCUMENTO\nREVISADO",
+        "markPositionHorizontal": "right",
+        "markPositionVertical": "top",
+        "color": "rosa",
+        "page": 1
+    },
+    
+    # Marcador con coordenadas exactas
+    {
+        "text": "MARCADOR_COORDENADAS_EXACTAS",
+        "markerText": "FIRMA\nREQUERIDA",
+        "coordinates": {"x": 450, "y": 750, "width": 120, "height": 60},
+        "color": "amarillo",
+        "page": 2
+    }
+]
+
 if __name__ == "__main__":
+    # Usa los valores originales o el ejemplo completo
+    valores_a_usar = VALUES  # Cambiar por EJEMPLO_VALUES_COMPLETO para probar todo
+    
     process_pdf(
         pdf_path=PDF_PATH,
-        values=VALUES,
+        values=valores_a_usar,
         out_dir=OUT_DIR,
         mode=MODE,
         lang=LANG,
