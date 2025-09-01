@@ -27,6 +27,8 @@ class ExecutionCreate(BaseModel):
     workflow_id: UUID  # ID del workflow a ejecutar
     mode: Optional[Mode] = None  # si se quiere sobrescribir
     data: Optional[Dict] = None  # datos dinámicos para el workflow
+    additional_data: Optional[Dict] = None  # datos adicionales en JSONB
+    custom_status: Optional[str] = None  # status personalizado
 
 class WorkflowExecutionCreate(BaseModel):
     """Schema para el endpoint RESTful /workflows/{workflow_id}/execute"""
@@ -45,6 +47,8 @@ class Execution(BaseModel):
     status: ExecStatus
     mode: Mode
     context: Dict
+    additional_data: Optional[Dict] = None  # Nueva columna JSONB
+    custom_status: Optional[str] = None  # Nueva columna para status personalizado
     current_step_id: Optional[UUID]
     class Config: orm_mode = True
 
@@ -80,3 +84,8 @@ class StepExecution(BaseModel):
 class WorkflowUpdate(BaseModel):
     name: Optional[str] = None
     mode: Optional[Mode] = None
+
+class ExecutionUpdate(BaseModel):
+    """Schema para actualizar additional_data y custom_status de una ejecución"""
+    additional_data: Optional[Dict] = None
+    custom_status: Optional[str] = None

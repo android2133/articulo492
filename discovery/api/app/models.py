@@ -57,6 +57,8 @@ class DiscoveryWorkflowExecution(Base):
     mode = Column(Enum(Mode, name="discovery_mode"))
     current_step_id = Column(UUID(as_uuid=True), ForeignKey("discovery_steps.id"), nullable=True)
     context = Column(JSON, default=lambda: {})
+    additional_data = Column(JSON, default=lambda: {})  # Nueva columna JSONB para datos adicionales
+    custom_status = Column(String, nullable=True)  # Nueva columna para status personalizado libre
     created_at = Column(TIMESTAMP(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(TIMESTAMP(timezone=True), server_default=text("CURRENT_TIMESTAMP"), onupdate=text("CURRENT_TIMESTAMP"))
 

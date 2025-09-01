@@ -293,6 +293,8 @@ async def get_workflow_executions(
                 "status": exec.status.value,
                 "current_step_id": str(exec.current_step_id) if exec.current_step_id else None,
                 "context": clean_context,
+                "additional_data": exec.additional_data,  # Nueva columna JSONB
+                "custom_status": exec.custom_status,  # Nueva columna de status personalizado
                 "created_at": exec.created_at.isoformat(),
                 "updated_at": exec.updated_at.isoformat()
             })
@@ -303,6 +305,8 @@ async def get_workflow_executions(
                 "workflow_id": str(exec.workflow_id),
                 "status": exec.status.value,
                 "current_step_id": str(exec.current_step_id) if exec.current_step_id else None,
+                "additional_data": exec.additional_data,  # Nueva columna JSONB
+                "custom_status": exec.custom_status,  # Nueva columna de status personalizado
                 "created_at": exec.created_at.isoformat(),
                 "updated_at": exec.updated_at.isoformat(),
                 "has_context": bool(exec.context),
@@ -424,6 +428,8 @@ async def get_execution_status(exec_id: str, db: AsyncSession = Depends(get_db))
         "created_at": exec_obj.created_at.isoformat() if exec_obj.created_at else None,
         "updated_at": exec_obj.updated_at.isoformat() if exec_obj.updated_at else None,
         "context": clean_context,
+        "additional_data": exec_obj.additional_data,  # Nueva propiedad JSONB
+        "custom_status": exec_obj.custom_status,  # Nueva propiedad de status personalizado
         "current_step": {
             "id": str(current_step.id) if current_step else None,
             "name": current_step.name if current_step else None,
@@ -442,6 +448,7 @@ async def get_execution_status(exec_id: str, db: AsyncSession = Depends(get_db))
         "tracking_urls": {
             "status": f"/executions/{exec_id}/status",
             "steps": f"/executions/{exec_id}/steps",
+            "properties": f"/executions/{exec_id}/properties",  # Nueva URL para propiedades
             "websocket": f"/ws/{exec_id}"
         }
     }
@@ -629,6 +636,83 @@ async def complete_workflow_execution(
         "completion_data": completion_data or {},
         "completed_at": datetime.datetime.utcnow().isoformat()
     }
+
+ #---------- Update Execution Properties ----------
+ 
+@app.patch("/discovery/executions/{exec_id}/properties", response_model=schemas.Execution)
+async def update_execution_properties(
+    exec_id: str,
+    body: schemas.ExecutionUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Actualiza las propiedades additional_data y custom_status de una ejecución.
+    Endpoint diseñado para ser usado desde Pioneer y otros microservicios.
+    
+    Args:
+        exec_id: ID de la ejecución a actualizar
+        body: Datos a actualizar (additional_data y/o custom_status)
+        
+    Returns:
+        Execution: Objeto de ejecución actualizado
+    """
+    # Buscar la ejecución
+    exec_obj = await db.get(models.DiscoveryWorkflowExecution, exec_id)
+    if not exec_obj:
+        raise HTTPException(status_code=404, detail="Ejecución no encontrada")
+    
+    # Actualizar additional_data si se proporciona
+    if body.additional_data is not None:
+        exec_obj.additional_data = body.additional_data
+        # Marcar el campo JSON como modificado para SQLAlchemy
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(exec_obj, 'additional_data')
+        logger.info(f"[PROPERTIES_UPDATE] Actualizando additional_data para ejecución {exec_id}")
+    
+    # Actualizar custom_status si se proporciona
+    if body.custom_status is not None:
+        exec_obj.custom_status = body.custom_status
+        logger.info(f"[PROPERTIES_UPDATE] Actualizando custom_status para ejecución {exec_id}: {body.custom_status}")
+    
+    # Persistir cambios
+    await db.commit()
+    await db.refresh(exec_obj)
+    
+    # Notificar cambios via WebSocket si hay clientes conectados
+    try:
+        await broadcaster(exec_id, {
+            "event": "execution_properties_updated",
+            "execution_id": exec_id,
+            "additional_data": exec_obj.additional_data,
+            "custom_status": exec_obj.custom_status
+        })
+    except Exception as e:
+        # Log pero no fallar si WebSocket falla
+        logger.warning(f"[PROPERTIES_UPDATE] Error enviando notificación WebSocket: {e}")
+    
+    return exec_obj
+@app.get("/discovery/executions/{exec_id}/properties")
+async def get_execution_properties(exec_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Obtiene solo las propiedades additional_data y custom_status de una ejecución.
+    Endpoint ligero para consultar estas propiedades específicas desde Pioneer.
+    
+    Args:
+        exec_id: ID de la ejecución
+        
+    Returns:
+        dict: Objeto con additional_data y custom_status
+    """
+    exec_obj = await db.get(models.DiscoveryWorkflowExecution, exec_id)
+    if not exec_obj:
+        raise HTTPException(status_code=404, detail="Ejecución no encontrada")
+    
+    return {
+        "execution_id": exec_id,
+        "additional_data": exec_obj.additional_data,
+        "custom_status": exec_obj.custom_status
+    }
+
 
 
 # ---------- WebSocket ----------

@@ -28,13 +28,9 @@ if not logger.handlers:
 
 
 # ---------- Pioneer HTTP Client ----------
-# ---------- Pioneer HTTP Client ----------
 class PioneerClient:
     def __init__(self, base_url: str = None):
-        resolved = (base_url or os.getenv("PIONEER_URL", "http://pioneer:8094/pioneer")).rstrip("/")
-        self.base_url = resolved
-        logger.info("PIONEER_URL resuelta: %s", self.base_url)  #
-
+        self.base_url = base_url or os.getenv("PIONEER_URL", "http://pioneer:8094/pioneer")
     
     async def call_remote_step(
         self, 
@@ -66,8 +62,8 @@ class PioneerClient:
             "fetch_user": 600,      # 5 minutos - procesamiento de documentos
             "validate_user": 600,   # 4 minutos - OCR y extracción de datos
             "transform_data": 600,  # 3 minutos - validación de INE
-            "approve_user": 990,    # 3.3 minutos - anotación con GEMINIS
-            "default": 700          # 2 minutos por defecto
+            "approve_user": 1600,    # 3.3 minutos - anotación con GEMINIS
+            "default": 800          # 2 minutos por defecto
         }
         
         timeout = step_timeouts.get(step_name, step_timeouts["default"])
@@ -161,13 +157,26 @@ def create_websocket_safe_context(context: dict) -> dict:
 async def start_execution(db: AsyncSession, workflow, mode: Mode, initial_data: dict = None):
     exec_id = uuid4()
     
-    # Inicializar contexto con datos dinámicos si se proporcionan
+    # Procesar archivos uploaded_documents si existen, subiéndolos a GCS
+    processed_initial_data = initial_data
+    if initial_data and "uploaded_documents" in initial_data:
+        logger.info(f"Procesando {len(initial_data['uploaded_documents'])} archivos para subir a GCS")
+        try:
+            # Importar aquí para evitar dependencias circulares
+            from .utilis.upload_files_bucket_gcp import process_uploaded_documents_to_gcs
+            processed_initial_data = await process_uploaded_documents_to_gcs(initial_data)
+            logger.info(f"Archivos procesados exitosamente, converted base64 to URIs")
+        except Exception as e:
+            logger.error(f"Error procesando archivos para GCS: {e}")
+            raise Exception(f"Error subiendo archivos a GCS: {str(e)}")
+    
+    # Inicializar contexto con datos dinámicos procesados
     initial_context = {
         "execution_id": str(exec_id)  # Siempre incluir execution_id para seguimiento
     }
-    if initial_data:
-        initial_context.update(initial_data)
-        logger.info(f"Inicializando ejecución {exec_id} con datos: {initial_data}")
+    if processed_initial_data:
+        initial_context.update(processed_initial_data)
+        # logger.info(f"Inicializando ejecución {exec_id} con datos procesados")
     
     exec_obj = DiscoveryWorkflowExecution(
         id=exec_id,
@@ -183,7 +192,7 @@ async def start_execution(db: AsyncSession, workflow, mode: Mode, initial_data: 
     flag_modified(exec_obj, 'context')
     
     await db.commit()
-    logger.info(f"Ejecución {exec_id} creada con contexto inicial: {initial_context}")
+    # logger.info(f"Ejecución {exec_id} creada con contexto inicial: {initial_context}")
     return exec_obj
 
 
@@ -354,7 +363,7 @@ async def mark_step_completed(exec_id: str, step_name: str, result_data: dict = 
     finally:
         if close_db:
             await db.close()
-            
+
 
 async def check_workflow_completion(db: AsyncSession, exec_obj: DiscoveryWorkflowExecution) -> bool:
     """
@@ -489,13 +498,12 @@ async def auto_complete_workflow_if_needed(db: AsyncSession, exec_obj: Discovery
     return False
 
 
-
 async def run_next_step(db: AsyncSession, exec_obj: DiscoveryWorkflowExecution):
     logger.info(f"[RUN_NEXT_STEP] === INICIANDO run_next_step ===")
     logger.info(f"[RUN_NEXT_STEP] Execution ID: {exec_obj.id}")
     logger.info(f"[RUN_NEXT_STEP] Status ANTES: {exec_obj.status}")
     logger.info(f"[RUN_NEXT_STEP] current_step_id ANTES: {exec_obj.current_step_id}")
-    logger.info(f"[RUN_NEXT_STEP] Contexto ANTES: {exec_obj.context}")
+    # logger.info(f"[RUN_NEXT_STEP] Contexto ANTES: {exec_obj.context}")
     
     # Función helper para eliminar base64 de diccionarios (evita problemas de tamaño en BD)
     def remove_base64_from_dict(data):
@@ -526,7 +534,7 @@ async def run_next_step(db: AsyncSession, exec_obj: DiscoveryWorkflowExecution):
     # Solo refrescar si current_step_id es None (primera ejecución)
     if exec_obj.current_step_id is None:
         await db.refresh(exec_obj)
-        logger.info(f"[RUN_NEXT_STEP] Después de refresh, contexto: {exec_obj.context}")
+        # logger.info(f"[RUN_NEXT_STEP] Después de refresh, contexto: {exec_obj.context}")
         logger.info(f"[RUN_NEXT_STEP] current_step_id DESPUÉS de refresh: {exec_obj.current_step_id}")
     else:
         logger.info(f"[RUN_NEXT_STEP] Saltando refresh porque current_step_id ya está establecido: {exec_obj.current_step_id}")
@@ -687,19 +695,19 @@ async def run_next_step(db: AsyncSession, exec_obj: DiscoveryWorkflowExecution):
         # Todos los steps van al microservicio
         logger.info(f"===== ENVIANDO A PIONEER =====")
         logger.info(f"Step remoto: {handler_name}")
-        logger.info(f"Context enviado: {dict(exec_obj.context)}")
+        # logger.info(f"Context enviado: {dict(exec_obj.context)}")
         logger.info(f"Config enviado: {{}}")
-        logger.info(f"Tipo de context: {type(exec_obj.context)}")
-        logger.info(f"Claves en context: {list(exec_obj.context.keys()) if exec_obj.context else 'None'}")
+        # logger.info(f"Tipo de context: {type(exec_obj.context)}")
+        # logger.info(f"Claves en context: {list(exec_obj.context.keys()) if exec_obj.context else 'None'}")
         output = await pioneer_client.call_remote_step(handler_name, dict(exec_obj.context), {})
         logger.info(f"===== RESPUESTA DE PIONEER =====")
-        logger.info(f"Output recibido: {output}")
+        # logger.info(f"Output recibido: {output}")
         
         logger.info(f"Handler {step.name} ejecutado exitosamente. Output: {output}")
         
         # Maneja diferentes formatos de output
-        logger.info(f"Output del handler {step.name}: {output}")
-        logger.info(f"Contexto ANTES de actualizar: {exec_obj.context}")
+        # logger.info(f"Output del handler {step.name}: {output}")
+        # logger.info(f"Contexto ANTES de actualizar: {exec_obj.context}")
         
         if isinstance(output, dict):
             # Si el output tiene una clave "context", actualiza el contexto con esos datos
@@ -724,13 +732,13 @@ async def run_next_step(db: AsyncSession, exec_obj: DiscoveryWorkflowExecution):
         # CRÍTICO: Marcar el campo JSON como modificado para SQLAlchemy
         flag_modified(exec_obj, 'context')
         
-        logger.info(f"Contexto DESPUÉS de actualizar: {exec_obj.context}")
+        # logger.info(f"Contexto DESPUÉS de actualizar: {exec_obj.context}")
         
         # Limpiar output_payload de base64 antes de guardarlo en BD
         clean_output_payload = remove_base64_from_dict(output) if output else {}
         step_exec.output_payload = clean_output_payload
         step_exec.status = StepStatus.success
-        logger.info(f"Step {step.name} completado exitosamente. Contexto final: {exec_obj.context}")
+        # logger.info(f"Step {step.name} completado exitosamente. Contexto final: {exec_obj.context}")
     except Exception as e:
         logger.error(f"Error ejecutando handler {step.name}: {e}")
         tb = traceback.format_exc()
@@ -743,7 +751,7 @@ async def run_next_step(db: AsyncSession, exec_obj: DiscoveryWorkflowExecution):
         step_exec.finished_at = datetime.datetime.utcnow()
         # IMPORTANTE: Asegurar que el contexto se persista en la BD
         await db.commit()
-        logger.info(f"Contexto persistido en BD para exec {exec_obj.id}: {exec_obj.context}")
+        # logger.info(f"Contexto persistido en BD para exec {exec_obj.id}: {exec_obj.context}")
 
     # 8) Notifica fin de step
     logger.info(f"Enviando notificación WebSocket para {step.name}")
@@ -759,8 +767,8 @@ async def run_next_step(db: AsyncSession, exec_obj: DiscoveryWorkflowExecution):
             "timestamp": datetime.datetime.utcnow().isoformat()
         }
     })
-    
-        # 8.5) Verificar si el workflow debería completarse automáticamente
+
+    # 8.5) Verificar si el workflow debería completarse automáticamente
     if exec_obj.status == ExecStatus.running and step_exec.status == StepStatus.success:
         workflow_completed = await auto_complete_workflow_if_needed(db, exec_obj)
         if workflow_completed:

@@ -125,7 +125,7 @@ async def report_completion(execution_id: str, step_name: str, result_data: dict
         step_name: Nombre del step completado
         result_data: Datos del resultado
     """
-    discovery_url = os.getenv("DISCOVERY_URL", "http://localhost:8000")
+    discovery_url = os.getenv("DISCOVERY_URL", "http://localhost:8000/discovery")
     
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -144,7 +144,7 @@ async def complete_workflow_execution(execution_id: str, status: str = "complete
         execution_id: ID del workflow execution
         status: Estado final del workflow (completed, failed, etc.)
     """
-    discovery_url = os.getenv("DISCOVERY_URL", "http://localhost:8000")
+    discovery_url = os.getenv("DISCOVERY_URL", "http://localhost:8000/discovery")
     
     try:
         async with httpx.AsyncClient(timeout=15) as client:
