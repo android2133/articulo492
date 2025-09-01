@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class GeminisClient:
     """Cliente para interactuar con el servicio GEMINIS"""
     
-    def __init__(self, base_url: str = "http://geminis:8093/geminis", timeout: int = 600):
+    def __init__(self, base_url: str = "http://geminis:8093/geminis", timeout: int = 900):
         """
         Inicializa el cliente GEMINIS
         

@@ -22,6 +22,47 @@ import difflib  # Para búsqueda difusa de texto
 # Import para el servicio de modelo dinámico
 from app.service.modelo_dinamico_simplified import procesar_con_modelo_dinamico_desde_bd
 
+async def procesar_con_servicio_sise(archivos_data: list, modelo: str) -> dict:
+    """
+    Función placeholder para procesar archivos con el servicio SISE.
+    
+    Args:
+        archivos_data: Lista de archivos a procesar
+        modelo: Nombre del modelo a usar
+        
+    Returns:
+        dict: Resultado del procesamiento con estructura similar a modelo_dinamico
+    """
+    try:
+        # Por ahora, devolver estructura esperada vacía
+        # TODO: Implementar lógica real del servicio SISE
+        print(f"[SISE] Procesando con modelo {modelo} - PLACEHOLDER")
+        return {
+            "resultado": {
+                "status": "placeholder",
+                "mensaje": "Servicio SISE no implementado",
+                "archivos_procesados": len(archivos_data),
+                "modelo_usado": modelo
+            },
+            "metadata": {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "service": "sise_placeholder"
+            }
+        }
+    except Exception as e:
+        print(f"[SISE] Error en procesamiento: {str(e)}")
+        return {
+            "resultado": {
+                "error": str(e),
+                "status": "error"
+            },
+            "metadata": {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "service": "sise_placeholder",
+                "error": True
+            }
+        }
+
 def find_best_field_match(fields: dict, target_patterns: list, min_similarity: float = 0.6):
     """
     Encuentra el mejor campo que coincida con los patrones objetivo usando búsqueda difusa.
@@ -148,23 +189,109 @@ async def complete_workflow_execution(execution_id: str, status: str = "complete
         print(f"[WORKFLOW] Error marcando workflow: {e}")
         return False
 
+async def update_discovery_execution_properties(execution_id: str, additional_data: dict = None, custom_status: str = None):
+    """
+    Actualiza las propiedades additional_data y custom_status de una ejecución en Discovery.
+    
+    Args:
+        execution_id: ID de la ejecución
+        additional_data: Datos adicionales en formato JSON
+        custom_status: Status personalizado como string libre
+        
+    Returns:
+        bool: True si se actualizó exitosamente, False en caso contrario
+    """
+    discovery_url = os.getenv("DISCOVERY_URL", "http://localhost:8001")  # Puerto 8001 para Discovery
+    
+    try:
+        payload = {}
+        if additional_data is not None:
+            payload["additional_data"] = additional_data
+        if custom_status is not None:
+            payload["custom_status"] = custom_status
+        
+        if not payload:
+            print("[DISCOVERY_PROPS] No hay datos para actualizar")
+            return False
+        
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.patch(
+                f"{discovery_url}/executions/{execution_id}/properties",
+                json=payload
+            )
+            
+            if response.status_code == 200:
+                print(f"[DISCOVERY_PROPS] ✓ Propiedades actualizadas para ejecución {execution_id}")
+                print(f"[DISCOVERY_PROPS] → additional_data: {bool(additional_data)}")
+                print(f"[DISCOVERY_PROPS] → custom_status: {custom_status}")
+                return True
+            else:
+                print(f"[DISCOVERY_PROPS] ✗ Error actualizando propiedades: {response.status_code}")
+                print(f"[DISCOVERY_PROPS] Response: {response.text}")
+                return False
+                
+    except httpx.TimeoutException:
+        print(f"[DISCOVERY_PROPS] ✗ Timeout actualizando propiedades de ejecución {execution_id}")
+        return False
+    except Exception as e:
+        print(f"[DISCOVERY_PROPS] ✗ Error actualizando propiedades: {e}")
+        return False
+
 @register("fetch_user")
 async def fetch_user(context: dict, config: dict) -> dict:
     """
     Procesa documentos usando el servicio de modelo dinámico.
     Parámetros dinámicos disponibles a través de dynamic_properties o directamente del contexto:
-    - base64: Contenido del documento en base64
-    - mime: Tipo MIME del documento
-    - nombre_documento: Nombre del archivo (opcional)
+    {
+        "execution_id":"98b7f1a5-0a13-4ae2-a17b-0a9f24401688",
+        "uuid_proceso":"c8f3c82f-60d1-4166-98da-cceb686517ac",
+        "upload_summary":{
+            "folder_path":"procesos/c8f3c82f-60d1-4166-98da-cceb686517ac/uploaded_files",
+            "total_files":1,
+            "uploaded_at":"f1a66b72",
+            "total_size_kb":24594.42
+        },
+        "uploaded_documents":[
+            {
+                "uri":"gs://bucket_poc_art492/procesos/c8f3c82f-60d1-4166-98da-cceb686517ac/uploaded_files/ae9209d8-d9fb-4676-9c11-8ed0616f1032_archivoCompleto.pdf",
+                "mime":"application/pdf",
+                "name":"archivoCompleto.pdf",
+                "folder":"procesos/c8f3c82f-60d1-4166-98da-cceb686517ac/uploaded_files",
+                "size_kb":24594.42,
+                "object_id":"ae9209d8-d9fb-4676-9c11-8ed0616f1032"
+            }
+        ]
+    }
     """
     print("XXXXXXXXXXXXXX--Procesando con Modelo Dinámico--XXXXXXXXXXXXXXXXXXXXXXX")
     print(f"[FETCH_USER - DEBUG] ===== RECIBIDO EN MICROSERVICIO =====")
     
+    
+    
     # Inicializar resultado_llm para evitar UnboundLocalError
     resultado_llm = {"resultado": {}, "metadata": {}}
     
+    # Inicializar variables de expediente para evitar UnboundLocalError
+    expedienteCompleto = "Estado del expediente no determinado"
+    expedienteConCargaCompleta = False
+    
+    # Inicializar resultado_servicio_sise para evitar UnboundLocalError
+    resultado_servicio_sise = {"resultado": {}, "metadata": {}}
+    
     # Obtener execution_id para reportar progreso
     execution_id = context.get("execution_id") or context.get("dynamic_properties", {}).get("execution_id")
+    
+    # Obtener las propiedades dinámicas del contexto
+    dynamic_props = context.get("dynamic_properties", {})
+    manual = context.get("manual") or dynamic_props.get("manual", False)
+    
+    # Obtener datos del documento (priorizar contexto directo, luego dynamic_properties)
+    uploaded_docs = context.get("uploaded_documents") or dynamic_props.get("uploaded_documents", [])
+    uri_archivo_inicial = uploaded_docs[0].get("uri") if uploaded_docs else context.get("base64", "")
+    mime_type = uploaded_docs[0].get("mime") if uploaded_docs else context.get("mime", "")
+    nombre_documento = uploaded_docs[0].get("name") if uploaded_docs else context.get("nombre_documento", "documento.pdf")
+    uuid_proceso = context.get("uuid_proceso") or dynamic_props.get("uuid_proceso", "uuid_default")
+
     
     if execution_id:
         await report_progress(execution_id, "fetch_user", {
@@ -174,23 +301,14 @@ async def fetch_user(context: dict, config: dict) -> dict:
         })
     
     ################################## NO BORRAR ###############################################
-    
-    # Obtener las propiedades dinámicas del contexto
-    dynamic_props = context.get("dynamic_properties", {})
-    manual = dynamic_props.get("manual") or context.get("manual", False)
-    
-    # Obtener datos del documento
-    base64_content = dynamic_props.get("base64") or context.get("base64", "")
-    mime_type = dynamic_props.get("mime") or context.get("mime", "")
-    nombre_documento = dynamic_props.get("nombre_documento") or context.get("nombre_documento", "documento.pdf")
-    uuid_proceso = dynamic_props.get("uuid_proceso") or context.get("uuid_proceso", "uuid_default")
+    #base64_content
 
     # Validar que tenemos los datos necesarios
-    if not base64_content or not mime_type:
+    if not uri_archivo_inicial or not mime_type:
         print("[FETCH_USER] No se proporcionaron datos de documento, usando datos mock")
         user = {
             "id": 1, 
-            "base64": base64_content,
+            "url": uri_archivo_inicial,
             "mime": mime_type,
             "status": "sin_documento",
             "mensaje": "No se proporcionó documento para procesar"
@@ -207,7 +325,7 @@ async def fetch_user(context: dict, config: dict) -> dict:
             # Preparar datos para el modelo dinámico
             archivos_data = [{
                 "nombre": nombre_documento,
-                "base64": base64_content,
+                "url": uri_archivo_inicial,
                 "mimetype": mime_type
             }]
             
@@ -225,7 +343,10 @@ async def fetch_user(context: dict, config: dict) -> dict:
             
             # Procesar con modelo dinámico (obtiene modelo desde BD)
             resultado_llm = await procesar_con_modelo_dinamico_desde_bd(archivos_data, nombre_modelo)
-            
+
+
+            resultado_servicio_sise = await procesar_con_modelo_dinamico_desde_bd(archivos_data, "dataSise")
+
             if execution_id:
                 await report_progress(execution_id, "fetch_user", {
                     "percentage": 60,
@@ -290,7 +411,7 @@ async def fetch_user(context: dict, config: dict) -> dict:
             res = reorder_pdf_sections(
                 secciones=resultado_llm["resultado"],
                 orden=orden_objetivo,
-                pdf_b64=base64_content,
+                pdf_gcs_uri=uri_archivo_inicial,
                 return_b64=True,
                 upload_sections_to_gcs=True,
                 gcs_manager=gcs_manager,
@@ -541,7 +662,8 @@ async def fetch_user(context: dict, config: dict) -> dict:
                 "pdf_anotado_resumen": user.get("pdf_anotado", {}).get("resumen_anotaciones", {}) if 'user' in locals() else {},
                 "expedienteCompleto": expedienteCompleto,
                 "expedienteConCargaCompleta": expedienteConCargaCompleta,
-                "paginaIneApoderado": resultado_pagina_ine["resultado"]
+                "paginaIneApoderado": resultado_pagina_ine["resultado"],
+                "dataSise": resultado_servicio_sise["resultado"]
 
           
             
@@ -861,6 +983,15 @@ async def transform_data(context: dict, config: dict) -> dict:
             print(f"[transform_data] Resultado validación INE: {resultado_validacion_ine.get('validacion_exitosa', False)}")
         except Exception as validacion_error:
             print(f"[transform_data] Error en validación INE: {str(validacion_error)}")
+            
+            try:
+                resultado_validacion_ine = validar_ine_con_modelo_identificado(
+                    resultado_llm.get("resultado", {}),
+                    uuid_proceso=uuid_proceso
+                )
+            except Exception as validacion_error:
+                print(f"[transform_data] Error en validación INE: {str(validacion_error)}")
+
             resultado_validacion_ine = {
                 "error": f"Error en validación INE: {str(validacion_error)}",
                 "validacion_exitosa": False
@@ -884,6 +1015,109 @@ async def transform_data(context: dict, config: dict) -> dict:
             "message": "Finalizando transformación",
             "current_task": "Preparando resultados"
         })
+        
+        ##Aqui
+    paginaIne = context.get("dynamic_properties", {}).get("paginaIneApoderado", {}).get("paginaIneApoderado")#es un numero por ejemplo 13
+    pdfUri = context.get("dynamic_properties", {}).get("pdf_reordenado_gcs_uri") or context.get("pdf_reordenado_gcs_uri")#es el uri del pdf a modificar
+    pdfFirmada = context.get("dynamic_properties", {}).get("pdf_reordenado_gcs_signed_url") or context.get("pdf_reordenado_gcs_signed_url")
+    
+    # Debug: verificar que tenemos los datos necesarios
+    print(f"[transform_data] DEBUG - paginaIne: {paginaIne}")
+    print(f"[transform_data] DEBUG - pdfUri: {pdfUri}")
+    print(f"[transform_data] DEBUG - pdfFirmada: {pdfFirmada}")
+    print(f"[transform_data] DEBUG - resultado_validacion_ine keys: {list(resultado_validacion_ine.keys()) if isinstance(resultado_validacion_ine, dict) else 'No es dict'}")
+    
+    # Implementar concatenación de PDF con imagen
+    concatenacion_resultado = {
+        "concatenacion_exitosa": False,
+        "error": "No inicializado"
+    }
+    
+    try:
+        # Importar la función de concatenación
+        from .utils.concatenarPdf import concatenar_pdf_con_imagen, validar_parametros
+        
+        # Obtener la imagen de evidencia del INE desde el resultado de validación
+        imagen_uri = resultado_validacion_ine.get("evidencia_ine", {}).get("gcs_uri")
+        
+        # Si no hay imagen de evidencia del INE, usar imagen por defecto
+        if not imagen_uri:
+            # Imagen de validación por defecto como fallback
+            imagen_uri = "gs://perdidas-totales-pruebas/imagenes/sello_validacion.png"
+            print(f"[transform_data] No se encontró evidencia INE, usando imagen por defecto: {imagen_uri}")
+        else:
+            print(f"[transform_data] Usando imagen de evidencia INE: {imagen_uri}")
+        
+        # Solo proceder si tenemos todos los datos necesarios
+        if pdfUri and imagen_uri and paginaIne:
+            
+            paginaIne = paginaIne - 3
+            # Validar parámetros antes de procesar
+            validar_parametros(pdfUri, imagen_uri, paginaIne)
+            
+            print(f"[transform_data] Insertando imagen en página {paginaIne} del PDF...")
+            
+            if execution_id:
+                await report_progress(execution_id, "transform_data", {
+                    "percentage": 85,
+                    "message": "Insertando imagen de validación en PDF",
+                    "current_task": f"Agregando imagen en página {paginaIne}"
+                })
+            
+            # Concatenar PDF con imagen
+            nueva_uri, url_firmada = concatenar_pdf_con_imagen(
+                pdf_uri=pdfUri,
+                imagen_uri=imagen_uri,
+                pagina_insercion=paginaIne
+            )
+            
+            # Actualizar las URIs con el PDF modificado
+            pdfUri = nueva_uri
+            pdfFirmada = url_firmada
+            
+            print(f"[transform_data] ✓ PDF concatenado exitosamente:")
+            print(f"[transform_data] → Nueva URI: {nueva_uri}")
+            print(f"[transform_data] → URL firmada: {url_firmada[:100]}...")
+            
+            # Agregar resultado al contexto para usar en pasos posteriores
+            concatenacion_resultado = {
+                "concatenacion_exitosa": True,
+                "nueva_uri": nueva_uri,
+                "url_firmada": url_firmada,
+                "pagina_insercion": paginaIne,
+                "imagen_insertada": imagen_uri,
+                "uri_original": context.get("pdf_reordenado_gcs_uri"),
+                "timestamp_concatenacion": datetime.now(timezone.utc).isoformat()
+            }
+            
+        else:
+            print(f"[transform_data] ⚠ Faltan datos para concatenación:")
+            print(f"[transform_data] → PDF URI: {'✓' if pdfUri else '✗'}")
+            print(f"[transform_data] → Imagen URI: {'✓' if imagen_uri else '✗'}")
+            print(f"[transform_data] → Página INE: {'✓' if paginaIne else '✗'}")
+            
+            
+            concatenacion_resultado = {
+                "concatenacion_exitosa": False,
+                "error": "Faltan datos necesarios para concatenación",
+                "datos_faltantes": {
+                    "pdf_uri": pdfUri is None,
+                    "imagen_uri": imagen_uri is None,
+                    "pagina_ine": paginaIne is None
+                }
+            }
+        
+    except Exception as concatenacion_error:
+        print(f"[transform_data] ⚠ Error en concatenación de PDF: {str(concatenacion_error)}")
+        
+        # En caso de error, mantener URIs originales
+        concatenacion_resultado = {
+            "concatenacion_exitosa": False,
+            "error": str(concatenacion_error),
+            "uri_original": pdfUri,
+            "url_firmada_original": pdfFirmada,
+            "stack_trace": str(concatenacion_error)
+        }
 
     # === PRESERVAR CONTEXTO Y SOLO ANEXAR TU CAMPO ===
     new_context = deepcopy(context)  # opcional; evita mutar el original
@@ -900,7 +1134,13 @@ async def transform_data(context: dict, config: dict) -> dict:
         "evidencia_ine_disponible": resultado_validacion_ine.get("evidencia_ine", {}).get("gcs_uri") is not None if "evidencia_ine" in resultado_validacion_ine else False,
         "evidencia_ine_gcs_uri": resultado_validacion_ine.get("evidencia_ine", {}).get("gcs_uri", "") if "evidencia_ine" in resultado_validacion_ine else "",
         "evidencia_ine_signed_url": resultado_validacion_ine.get("evidencia_ine", {}).get("gcs_signed_url", "") if "evidencia_ine" in resultado_validacion_ine else "",
-        "evidencia_ine_filename": resultado_validacion_ine.get("evidencia_ine", {}).get("filename", "") if "evidencia_ine" in resultado_validacion_ine else ""
+        "evidencia_ine_filename": resultado_validacion_ine.get("evidencia_ine", {}).get("filename", "") if "evidencia_ine" in resultado_validacion_ine else "",
+        # Agregar información de concatenación de PDF
+        "concatenacion_pdf": concatenacion_resultado,
+        "pdf_concatenado_uri": concatenacion_resultado.get("nueva_uri", pdfUri),
+        "pdf_concatenado_signed_url": concatenacion_resultado.get("url_firmada", pdfFirmada),
+        "concatenacion_exitosa": concatenacion_resultado.get("concatenacion_exitosa", False),
+        "pagina_imagen_insertada": concatenacion_resultado.get("pagina_insercion", paginaIne)
     }
     
     # Reportar completado
@@ -912,7 +1152,10 @@ async def transform_data(context: dict, config: dict) -> dict:
             "validation_successful": resultado_validacion_ine.get("validacion_exitosa", False),
             "evidencia_ine_capturada": resultado_validacion_ine.get("evidencia_ine", {}).get("gcs_uri") is not None if "evidencia_ine" in resultado_validacion_ine else False,
             "listas_negras_consultadas": resultado_listas_negras is not None and "error" not in resultado_listas_negras,
-            "apellido_consultado": resultado_llm.get("resultado", {}).get("apellido", "") if resultado_llm.get("resultado") else ""
+            "apellido_consultado": resultado_llm.get("resultado", {}).get("apellido", "") if resultado_llm.get("resultado") else "",
+            "concatenacion_pdf_exitosa": concatenacion_resultado.get("concatenacion_exitosa", False),
+            "imagen_insertada_pagina": concatenacion_resultado.get("pagina_insercion", paginaIne),
+            "pdf_concatenado_disponible": concatenacion_resultado.get("nueva_uri") is not None
         })
     
     return {
@@ -1036,7 +1279,8 @@ async def approve_user(context: dict, config: dict) -> dict:
     gcs_uri = dynamic_props.get("pdf_reordenado_gcs_uri", "")
     resultado_llm = dynamic_props.get("resultado_llm_ordena_pdf", {})
     campos_a_marcar_pdf = dynamic_props.get("campos_a_marcar_pdf", [])
-    
+    concatenacion_pdf = dynamic_props.get("concatenacion_pdf", "")
+
     # Debug: verificar qué está llegando del modelo dinámico
     print(f"[APPROVE_USER - DEBUG] campos_a_marcar_pdf recibido: {campos_a_marcar_pdf}")
     print(f"[APPROVE_USER - DEBUG] Tipo: {type(campos_a_marcar_pdf)}, Longitud: {len(campos_a_marcar_pdf) if campos_a_marcar_pdf else 0}")
@@ -1095,8 +1339,24 @@ async def approve_user(context: dict, config: dict) -> dict:
            
            
             #ayudame a generar una variable con el texto: "SE VALIDO EN QUIEN ES QUIEN E INTERNET, VALIDO MIRAI 15 AGOSTO 2025 2:06PM"
-            now = datetime.now()
-            fecha_hora = now.strftime("%d %B %Y %I:%M%p")
+            import pytz
+            
+            # Configurar zona horaria de México
+            tz_mexico = pytz.timezone('America/Mexico_City')
+            now = datetime.now(tz_mexico)
+            
+            # Diccionario para meses en español
+            meses_espanol = {
+                'January': 'ENERO', 'February': 'FEBRERO', 'March': 'MARZO',
+                'April': 'ABRIL', 'May': 'MAYO', 'June': 'JUNIO',
+                'July': 'JULIO', 'August': 'AGOSTO', 'September': 'SEPTIEMBRE',
+                'October': 'OCTUBRE', 'November': 'NOVIEMBRE', 'December': 'DICIEMBRE'
+            }
+            
+            # Formatear fecha y hora
+            fecha_hora_en = now.strftime("%d %B %Y %I:%M%p")
+            mes_en = now.strftime("%B")
+            fecha_hora = fecha_hora_en.replace(mes_en, meses_espanol[mes_en])
             marcaValidacion = f"SE VALIDO EN QUIEN ES QUIEN E INTERNET, VALIDO MIRAI {fecha_hora.upper()}"
            
             cabecera492 =  {
@@ -1141,7 +1401,9 @@ async def approve_user(context: dict, config: dict) -> dict:
                     font_size=8,
                     destino_folder=f"procesos/{dynamic_props.get('uuid_proceso', 'uuid_default')}/marcados"
                 )
-                
+
+                hope = concatenacion_pdf.get("nueva_uri", "")
+
                 if resultado_marcado_ine["success"]:
                     print(f"[APPROVE_USER] ✓ PDF marcado con info INE: {resultado_marcado_ine['uri_marcado']}")
                     print(f"[APPROVE_USER] ✓ Texto agregado: {resultado_marcado_ine['texto_agregado']}")
@@ -1203,7 +1465,7 @@ async def approve_user(context: dict, config: dict) -> dict:
 
             # Llamar a GEMINIS de forma síncrona
             geminis_result = process_pdf_with_geminis(
-                pdf_uri=gcs_uri,
+                pdf_uri=hope,
                 values=valores_para_anotar,
                 dest_folder=f"procesos/{dynamic_props.get('uuid_proceso', 'uuid_default')}/anotados",
                 options={
@@ -1308,9 +1570,28 @@ async def approve_user(context: dict, config: dict) -> dict:
             # Intentar marcar workflow como completado (opcional - no crítico si falla)
             try:
                 if expedienteConCargaCompleta:
+                    # Actualizar propiedades para expediente completo
+                    props_updated = await update_discovery_execution_properties(
+                        execution_id=execution_id,  # Usar el execution_id real
+                        additional_data={"descripcion": "Documentos completos", "expediente_status": "completo"},
+                        custom_status="complete"
+                    )
                     workflow_completed = await complete_workflow_execution(execution_id, "completed")
                 else:
-                    workflow_completed = await complete_workflow_execution(execution_id, "failed")
+                    # Actualizar propiedades para expediente incompleto
+                    props_updated = await update_discovery_execution_properties(
+                        execution_id=execution_id,  # Usar el execution_id real
+                        additional_data={"descripcion": expedienteCompleto, "expediente_status": "incompleto"},
+                        custom_status="incomplete"
+                    )
+                    workflow_completed = await complete_workflow_execution(execution_id, "completed_with_issues")
+                
+                # Verificar resultados
+                if props_updated:
+                    print(f"[APPROVE_USER] ✓ Propiedades de Discovery actualizadas para {execution_id}")
+                else:
+                    print(f"[APPROVE_USER] ⚠ No se pudieron actualizar las propiedades de Discovery")
+                    
                 if workflow_completed:
                     print(f"[APPROVE_USER] ✓ Workflow {execution_id} marcado como completado en Discovery")
                 else:
