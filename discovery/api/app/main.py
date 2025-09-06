@@ -173,7 +173,7 @@ async def execute_workflow_async(wf_id: str, body: schemas.WorkflowExecutionCrea
     exec_obj = await workflow_engine.start_execution(db, wf, mode or wf.mode, initial_data=dynamic_data)
     
     # Iniciar la ejecución en background sin esperar
-    asyncio.create_task(workflow_engine.run_workflow_async(db, exec_obj))
+    asyncio.create_task(workflow_engine.run_workflow_async(str(exec_obj.id)))
     
     return {
         "execution_id": str(exec_obj.id),
@@ -219,7 +219,7 @@ async def execute_workflow_legacy_async(body: schemas.ExecutionCreate, db: Async
     exec_obj = await workflow_engine.start_execution(db, wf, body.mode or wf.mode, initial_data=body.data)
     
     # Iniciar la ejecución en background sin esperar
-    asyncio.create_task(workflow_engine.run_workflow_async(db, exec_obj))
+    asyncio.create_task(workflow_engine.run_workflow_async(str(exec_obj.id)))
     
     return {
         "execution_id": str(exec_obj.id),
@@ -229,6 +229,8 @@ async def execute_workflow_legacy_async(body: schemas.ExecutionCreate, db: Async
         "websocket_url": f"/ws/{exec_obj.id}",
         "created_at": exec_obj.created_at.isoformat() if exec_obj.created_at else None
     }
+
+
 
 @app.get("/discovery/workflows/{wf_id}/executions")
 async def get_workflow_executions(

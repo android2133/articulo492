@@ -105,7 +105,7 @@ async def report_progress(execution_id: str, step_name: str, progress_data: dict
         step_name: Nombre del step que reporta
         progress_data: Datos de progreso (percentage, message, etc.)
     """
-    discovery_url = os.getenv("DISCOVERY_URL", "http://discovery:8090/discovery")
+    discovery_url = os.getenv("DISCOVERY_URL", "http://localhost:8000")
     
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -125,7 +125,7 @@ async def report_completion(execution_id: str, step_name: str, result_data: dict
         step_name: Nombre del step completado
         result_data: Datos del resultado
     """
-    discovery_url = os.getenv("DISCOVERY_URL", "http://discovery:8090/discovery")
+    discovery_url = os.getenv("DISCOVERY_URL", "http://localhost:8000/discovery")
     
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -144,7 +144,7 @@ async def complete_workflow_execution(execution_id: str, status: str = "complete
         execution_id: ID del workflow execution
         status: Estado final del workflow (completed, failed, etc.)
     """
-    discovery_url = os.getenv("DISCOVERY_URL", "http://discovery:8090/discovery")
+    discovery_url = os.getenv("DISCOVERY_URL", "http://localhost:8000/discovery")
     
     try:
         async with httpx.AsyncClient(timeout=15) as client:
@@ -201,7 +201,7 @@ async def update_discovery_execution_properties(execution_id: str, additional_da
     Returns:
         bool: True si se actualizó exitosamente, False en caso contrario
     """
-    discovery_url = os.getenv("DISCOVERY_URL", "http://discovery:8090/discovery")  # Puerto 8090 para Discovery en GCP
+    discovery_url = os.getenv("DISCOVERY_URL", "http://localhost:8001")  # Puerto 8001 para Discovery
     
     try:
         payload = {}
@@ -1661,3 +1661,5 @@ async def reject_user(context: dict, config: dict) -> dict:
         # "redesSociales":  json.loads(redesSociales)
 
     }
+
+

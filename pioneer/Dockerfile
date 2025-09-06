@@ -5,10 +5,10 @@ WORKDIR /app
 COPY credentials.json /app/credentials.json
 
 ENV PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 
+    PIP_NO_CACHE_DIR=1
 ENV GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
-# Todo por 8094
-# ---- Sistema, Chrome y libs que Chrome necesita ----
+
+# Sistema + Chrome y librerías
 RUN set -eux; \
   apt-get update; \
   apt-get install -y --no-install-recommends \
@@ -24,14 +24,18 @@ RUN set -eux; \
   apt-get install -y --no-install-recommends google-chrome-stable; \
   rm -rf /var/lib/apt/lists/*
 
-# ---- Python ----
+# Python
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ---- Código ----
+# Código
 COPY ./app ./app
 COPY ./core ./core
 
 
+
+
 EXPOSE 8094
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8094"]
+
+#  keep-alive más largo
+CMD ["uvicorn", "app.main:app",     "--host", "0.0.0.0","--port", "8094","--timeout-keep-alive", "600","--log-level", "info"]

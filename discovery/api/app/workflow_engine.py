@@ -31,6 +31,7 @@ if not logger.handlers:
 class PioneerClient:
     def __init__(self, base_url: str = None):
         self.base_url = base_url or os.getenv("PIONEER_URL", "http://pioneer:8094/pioneer")
+        logger.info(base_url)
     
     async def call_remote_step(
         self, 
@@ -56,6 +57,7 @@ class PioneerClient:
         }
         
         url = f"{self.base_url}/steps/{step_name}"
+        logger.info(url)
         
         # Timeouts específicos por step (en segundos)
         step_timeouts = {
@@ -89,7 +91,7 @@ class PioneerClient:
             Diccionario con la lista de steps disponibles
         """
         url = f"{self.base_url}/steps"
-        
+        logger.info(url)
         async with httpx.AsyncClient(timeout=30) as client:
             try:
                 response = await client.get(url)
@@ -194,9 +196,19 @@ async def start_execution(db: AsyncSession, workflow, mode: Mode, initial_data: 
     await db.commit()
     # logger.info(f"Ejecución {exec_id} creada con contexto inicial: {initial_context}")
     return exec_obj
+async def run_workflow_async(execution_id: str):
+    """
+    Lanza la ejecución en background abriendo su propia AsyncSession.
+    Recibe SOLO el ID para evitar pasar sesiones/instancias 'detached'.
+    """
+    async with SessionLocal() as db:
+        exec_obj = await db.get(DiscoveryWorkflowExecution, execution_id)
+        if not exec_obj:
+            logger.error(f"[ASYNC WORKFLOW] Execution {execution_id} not found")
+            return
+        await _run_workflow_async_core(db, exec_obj)
 
-
-async def run_workflow_async(db: AsyncSession, exec_obj: DiscoveryWorkflowExecution):
+async def _run_workflow_async_core(db: AsyncSession, exec_obj: DiscoveryWorkflowExecution):
     """
     Ejecuta un workflow completo de forma asíncrona en background.
     Esta función maneja toda la ejecución sin bloquear el endpoint que la invoca.

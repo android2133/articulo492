@@ -1,6 +1,7 @@
 FROM python:3.12-slim
 COPY credentials.json /app/credentials.json
-# Tesseract + idioma español
+
+# Tesseract + español
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr tesseract-ocr-spa curl \
     && rm -rf /var/lib/apt/lists/*
@@ -14,14 +15,15 @@ COPY app ./app
 
 EXPOSE 8093
 
-
-
-# Variables de entorno para integración con la base de datos compartida
+# Vars
 ENV DATABASE_URL=postgresql+asyncpg://postgres:.t<J*FFLHDGMuAsH@35.226.67.188:5432/discovery
 ENV WORKER_CONCURRENCY=2
 ENV POLL_INTERVAL_SEC=1.0
-
-# ADC para GCP (opcional, descomenta si usas Google Cloud)
 ENV GOOGLE_APPLICATION_CREDENTIALS=/var/secrets/google/key.json
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8093"]
+
+
+#  keep-alive más largo
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8093","--timeout-keep-alive", "600", "--log-level", "info"]
+
+
