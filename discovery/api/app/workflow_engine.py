@@ -1,6 +1,7 @@
 import asyncio, logging, datetime, json, traceback, os
 from uuid import UUID, uuid4
 import httpx
+import urllib.request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm.attributes import flag_modified
@@ -196,6 +197,7 @@ async def start_execution(db: AsyncSession, workflow, mode: Mode, initial_data: 
     await db.commit()
     # logger.info(f"Ejecución {exec_id} creada con contexto inicial: {initial_context}")
     return exec_obj
+
 async def run_workflow_async(execution_id: str):
     """
     Lanza la ejecución en background abriendo su propia AsyncSession.
@@ -206,7 +208,10 @@ async def run_workflow_async(execution_id: str):
         if not exec_obj:
             logger.error(f"[ASYNC WORKFLOW] Execution {execution_id} not found")
             return
+        
+        documentos_iniciales_modificados = await b64_validator(initial_data=exec_obj.context)
         await _run_workflow_async_core(db, exec_obj)
+
 
 async def _run_workflow_async_core(db: AsyncSession, exec_obj: DiscoveryWorkflowExecution):
     """
@@ -801,3 +806,37 @@ async def run_next_step(db: AsyncSession, exec_obj: DiscoveryWorkflowExecution):
     logger.info(f"[RUN_NEXT_STEP] === FINALIZANDO run_next_step para step {step.name} ===")
     return step
 
+async def b64_validator(initial_data: dict) -> bool:
+    url = "https://discovery-484108674418.us-central1.run.app/discovery/validar-y-adjuntar-fea"
+    headers = {"Content-Type": "application/json"}
+
+    try:
+        # Armamos el payload
+        data = json.dumps(initial_data).encode("utf-8")
+        logger.info(f"aqui estaaaa el initial_data {initial_data}")
+
+        # Creamos la request
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+
+        # Enviamos la petición y leemos la respuesta
+        with urllib.request.urlopen(req) as response:
+            status_code = response.getcode()
+            resp_text = response.read().decode()
+            result = json.loads(resp_text)
+
+            # Validamos status 200
+            if status_code == 200:
+                # Checamos el campo resultado.modificado
+                if result.get("resultado", {}).get("modificado") is True:
+                    logger.info("✅ Documento en bucket modificado correctamente")
+                    return True
+                else:
+                    logger.info("⚠️ Firma electrónica presente, no se agrega")
+                    return False
+            else:
+                logger.info(f"❌ Respuesta inesperada, código HTTP: {status_code}")
+                return False
+
+    except Exception as e:
+        logger.info("❌ Error en b64_validator:", str(e))
+        return False
