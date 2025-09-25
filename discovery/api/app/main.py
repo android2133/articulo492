@@ -223,6 +223,7 @@ async def execute_workflow_legacy_async(body: schemas.ExecutionCreate, db: Async
     
     return {
         "execution_id": str(exec_obj.id),
+        "id_consecutivo": str(exec_obj.id_consecutivo),
         "workflow_id": str(body.workflow_id),
         "status": exec_obj.status,
         "tracking_url": f"/executions/{exec_obj.id}/status",
@@ -304,6 +305,7 @@ async def get_workflow_executions(
             # Retornar solo información resumida
             execution_data.append({
                 "id": str(exec.id),
+                "id_consecutivo": str(exec.id_consecutivo),
                 "workflow_id": str(exec.workflow_id),
                 "status": exec.status.value,
                 "current_step_id": str(exec.current_step_id) if exec.current_step_id else None,
@@ -454,6 +456,44 @@ async def get_execution_status(exec_id: str, db: AsyncSession = Depends(get_db))
             "websocket": f"/ws/{exec_id}"
         }
     }
+
+
+@app.get("/discovery/executions/{exec_id}/jsonsiisa", response_model=dict)
+async def get_execution_status(exec_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Retorna únicamente el contexto limpio (sin base64) de una ejecución.
+    """
+    # Función helper para eliminar base64
+    def remove_base64_from_dict(data):
+        if isinstance(data, dict):
+            clean_data = {}
+            for key, value in data.items():
+                if key == "base64":
+                    if isinstance(value, str):
+                        clean_data[key] = f"[BASE64_CONTENT_REMOVED - Length: {len(value)} chars]"
+                    else:
+                        clean_data[key] = "[BASE64_CONTENT_REMOVED - Not string]"
+                elif isinstance(value, dict):
+                    clean_data[key] = remove_base64_from_dict(value)
+                elif isinstance(value, list):
+                    clean_data[key] = [remove_base64_from_dict(item) if isinstance(item, dict) else item for item in value]
+                else:
+                    clean_data[key] = value
+            return clean_data
+        return data
+
+    # Obtener ejecución
+    exec_obj = await db.get(models.DiscoveryWorkflowExecution, exec_id)
+    if not exec_obj:
+        raise HTTPException(404, "Ejecución no encontrada")
+
+    # Limpiar contexto
+    clean_context = remove_base64_from_dict(exec_obj.context) if exec_obj.context else {}
+
+    return clean_context.get("dynamic_properties", {}).get("dataSise", None)
+
+
+
 
 @app.get("/discovery/executions/{exec_id}/steps", response_model=list[schemas.StepExecution])
 async def get_execution_steps(exec_id: str, db: AsyncSession = Depends(get_db)):

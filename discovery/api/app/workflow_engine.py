@@ -196,6 +196,7 @@ async def start_execution(db: AsyncSession, workflow, mode: Mode, initial_data: 
     
     await db.commit()
     # logger.info(f"Ejecución {exec_id} creada con contexto inicial: {initial_context}")
+    await db.refresh(exec_obj)
     return exec_obj
 
 async def run_workflow_async(execution_id: str):

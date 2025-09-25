@@ -50,7 +50,6 @@ class DiscoveryStep(Base):
 
 class DiscoveryWorkflowExecution(Base):
     __tablename__ = "discovery_workflow_executions"
-
     id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
     workflow_id = Column(UUID(as_uuid=True), ForeignKey("discovery_workflows.id"))
     status = Column(Enum(ExecStatus, name="discovery_exec_status"), default=ExecStatus.running)
@@ -61,6 +60,7 @@ class DiscoveryWorkflowExecution(Base):
     custom_status = Column(String, nullable=True)  # Nueva columna para status personalizado libre
     created_at = Column(TIMESTAMP(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(TIMESTAMP(timezone=True), server_default=text("CURRENT_TIMESTAMP"), onupdate=text("CURRENT_TIMESTAMP"))
+    id_consecutivo = Column(String, nullable=True)
 
 class DiscoveryStepExecution(Base):
     __tablename__ = "discovery_step_executions"
