@@ -23,6 +23,9 @@ import logging
 import uuid
 from typing import List, Dict, Optional, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from PyPDF2 import PdfMerger
+import io
+import re
 
 from google.cloud import storage
 from google.oauth2 import service_account
@@ -247,6 +250,13 @@ async def process_uploaded_documents_to_gcs(initial_data: Dict[str, Any]) -> Dic
             folder_path,
             max_workers=3  # Reducir concurrencia para evitar problemas
         )
+
+        # Subir archivos siempre tener original
+        upload_results_originales = gcs_manager.upload_multiple_files_to_folder(
+            uploaded_documents, 
+            f"procesos/{uuid_proceso}/uploaded_files/originales",
+            max_workers=3  # Reducir concurrencia para evitar problemas
+        )
         
         # Verificar que todos los archivos se subieron correctamente
         failed_uploads = [result for result in upload_results if "error" in result]
@@ -287,6 +297,73 @@ async def process_uploaded_documents_to_gcs(initial_data: Dict[str, Any]) -> Dic
     except Exception as e:
         logger.error(f"Error procesando documentos para subida a GCS: {e}")
         raise Exception(f"Error procesando documentos: {str(e)}")
+
+
+
+
+
+
+
+async def merge_pdfs_from_initial_data_and_gcs(initial_data: Dict[str, Any], uri: str, bucket_name: str) -> str:
+    """
+    Une todos los PDFs del initial_data y de la carpeta en GCS indicada en uri,
+    y devuelve el PDF combinado en base64.
+    
+    Args:
+        initial_data: Diccionario con documentos base64
+        uri: URI de la carpeta en GCS (gs://bucket/folder/)
+        bucket_name: Nombre del bucket en GCS
+        
+    Returns:
+        Base64 del PDF combinado
+    """
+    
+    # Crear cliente de GCS
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+    
+    # Preparar lista de streams de PDFs
+    pdf_streams = []
+
+    # 1️⃣ PDFs del initial_data
+    for doc in initial_data.get("uploaded_documents", []):
+        if doc.get("mime") == "application/pdf" and doc.get("base64"):
+            pdf_bytes = base64.b64decode(doc["base64"])
+            pdf_streams.append(io.BytesIO(pdf_bytes))
+
+    
+    # 2️⃣ PDFs de GCS
+    # Extraer la ruta relativa dentro del bucket de la URI
+    match = re.match(r"gs://[^/]+/(.+)", uri)
+    if not match:
+        raise ValueError("URI de GCS inválida")
+    
+    folder_path = match.group(1).rstrip("/")
+    
+    # Listar blobs en la carpeta
+    blobs = bucket.list_blobs(prefix=folder_path + "/")
+    
+    for blob in blobs:
+        if blob.name.lower().endswith(".pdf"):
+            pdf_bytes = blob.download_as_bytes()
+            pdf_streams.append(io.BytesIO(pdf_bytes))
+    
+    # 3️⃣ Unir todos los PDFs
+    merger = PdfMerger()
+    for pdf_io in pdf_streams:
+        merger.append(pdf_io)
+    
+    output_stream = io.BytesIO()
+    merger.write(output_stream)
+    merger.close()
+    
+    # 4️⃣ Convertir a base64
+    output_stream.seek(0)
+    merged_base64 = base64.b64encode(output_stream.read()).decode("utf-8")
+    
+    return merged_base64
+
+
 
 
 def validate_uploaded_documents_structure(data: Dict[str, Any]) -> bool:

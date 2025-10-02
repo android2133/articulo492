@@ -233,6 +233,69 @@ async def execute_workflow_legacy_async(body: schemas.ExecutionCreate, db: Async
 
 
 
+
+@app.post("/discovery/execute-async-reprocess/{execution_id}", response_model=dict)
+async def execute_workflow_legacy_async_reprocess(execution_id: str, body: schemas.ExecutionCreate, db: AsyncSession = Depends(get_db)):
+    """
+    Endpoint de compatibilidad hacia atrás para ejecutar workflows de forma asíncrona.
+    Devuelve inmediatamente un UUID para seguimiento sin esperar a que termine.
+    """
+    wf = await crud.get_workflow(db, body.workflow_id)
+    if not wf:
+        raise HTTPException(404, f"Workflow no encontrado: {body.workflow_id}")
+
+
+        """
+    Devuelve únicamente el uuid_proceso de una ejecución.
+    """
+    exec_obj_previous = await db.get(models.DiscoveryWorkflowExecution, execution_id)
+    if not exec_obj_previous:
+        raise HTTPException(404, "Ejecución no encontrada")
+    
+    # Extraer el uuid_proceso del contexto
+    uuid_proceso = exec_obj_previous.context.get("uuid_proceso") if exec_obj_previous.context else None
+
+    if not uuid_proceso:
+        raise HTTPException(404, "uuid_proceso no encontrado en el contexto")
+    
+    id_consecutivo = exec_obj_previous.id_consecutivo
+
+    if not id_consecutivo:
+        raise HTTPException(404, "id_consecutivo no encontrado")
+    
+    b64_updated = await workflow_engine.add_new_document(uuid_proceso=uuid_proceso, initial_data=body.data)
+
+    body.data["uploaded_documents"]  = [{
+        "name": "archivo.pdf",
+        "mime": "application/pdf", 
+        "base64": b64_updated
+    }]
+
+
+    await db.delete(exec_obj_previous)
+    await db.commit()
+
+
+    # Crear la ejecución
+    exec_obj = await workflow_engine.start_execution_reprocess(db, wf, body.mode or wf.mode, initial_data=body.data, id_consec=id_consecutivo)
+    
+    # Iniciar la ejecución en background sin esperar
+    asyncio.create_task(workflow_engine.run_workflow_async(str(exec_obj.id)))
+    
+    return {
+        "execution_id": str(exec_obj.id),
+        "id_consecutivo": str(exec_obj.id_consecutivo),
+        "workflow_id": str(body.workflow_id),
+        "status": exec_obj.status,
+        "tracking_url": f"/executions/{exec_obj.id}/status",
+        "websocket_url": f"/ws/{exec_obj.id}",
+        "created_at": exec_obj.created_at.isoformat() if exec_obj.created_at else None
+    }
+
+
+
+
+
 @app.get("/discovery/workflows/{wf_id}/executions")
 async def get_workflow_executions(
     wf_id: str, 
@@ -459,7 +522,7 @@ async def get_execution_status(exec_id: str, db: AsyncSession = Depends(get_db))
 
 
 @app.get("/discovery/executions/{exec_id}/jsonsiisa", response_model=dict)
-async def get_execution_status(exec_id: str, db: AsyncSession = Depends(get_db)):
+async def get_execution_status_jsonsiisa(exec_id: str, db: AsyncSession = Depends(get_db)):
     """
     Retorna únicamente el contexto limpio (sin base64) de una ejecución.
     """

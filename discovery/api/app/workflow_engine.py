@@ -199,6 +199,75 @@ async def start_execution(db: AsyncSession, workflow, mode: Mode, initial_data: 
     await db.refresh(exec_obj)
     return exec_obj
 
+
+
+# ---------- Engine ----------
+async def start_execution_reprocess(db: AsyncSession, workflow, mode: Mode, initial_data: dict = None, id_consec: str = None):
+    exec_id = uuid4()
+    
+    # Procesar archivos uploaded_documents si existen, subiéndolos a GCS
+    processed_initial_data = initial_data
+    if initial_data and "uploaded_documents" in initial_data:
+        logger.info(f"Procesando {len(initial_data['uploaded_documents'])} archivos para subir a GCS")
+        try:
+            # Importar aquí para evitar dependencias circulares
+            from .utilis.upload_files_bucket_gcp import process_uploaded_documents_to_gcs
+            processed_initial_data = await process_uploaded_documents_to_gcs(initial_data)
+            logger.info(f"Archivos procesados exitosamente, converted base64 to URIs")
+        except Exception as e:
+            logger.error(f"Error procesando archivos para GCS: {e}")
+            raise Exception(f"Error subiendo archivos a GCS: {str(e)}")
+    
+    # Inicializar contexto con datos dinámicos procesados
+    initial_context = {
+        "execution_id": str(exec_id)  # Siempre incluir execution_id para seguimiento
+    }
+    if processed_initial_data:
+        initial_context.update(processed_initial_data)
+        # logger.info(f"Inicializando ejecución {exec_id} con datos procesados")
+    
+    exec_obj = DiscoveryWorkflowExecution(
+        id=exec_id,
+        id_consecutivo=id_consec,
+        workflow_id=workflow.id,
+        mode=mode or workflow.mode,
+        status=ExecStatus.running,
+        current_step_id=None,
+        context=initial_context,
+    )
+    db.add(exec_obj)
+    
+    # CRÍTICO: Marcar el campo JSON como modificado para SQLAlchemy
+    flag_modified(exec_obj, 'context')
+    
+    await db.commit()
+    # logger.info(f"Ejecución {exec_id} creada con contexto inicial: {initial_context}")
+    await db.refresh(exec_obj)
+    return exec_obj
+
+
+# ---------- Engine ----------
+async def add_new_document(uuid_proceso: str ,initial_data: dict = None):
+    
+    # Procesar archivos uploaded_documents si existen, subiéndolos a GCS
+    processed_initial_data = initial_data
+    original_documents_uri = f"gs://bucket_poc_art492/procesos/{uuid_proceso}/uploaded_files/originales/"
+    if initial_data and "uploaded_documents" in initial_data:
+        logger.info(f"Procesando {len(initial_data['uploaded_documents'])} archivos para unirlo y reprocesar")
+        try:
+            # Importar aquí para evitar dependencias circulares
+            from .utilis.upload_files_bucket_gcp import merge_pdfs_from_initial_data_and_gcs
+            processed_initial_data = await merge_pdfs_from_initial_data_and_gcs(initial_data, original_documents_uri, "bucket_poc_art492")
+            logger.info(f"Archivos procesados exitosamente, converted base64 to URIs")
+        except Exception as e:
+            logger.error(f"Error procesando archivos para GCS: {e}")
+            raise Exception(f"Error subiendo archivos a GCS: {str(e)}")
+        
+        return processed_initial_data
+
+
+
+
 async def run_workflow_async(execution_id: str):
     """
     Lanza la ejecución en background abriendo su propia AsyncSession.
@@ -814,7 +883,7 @@ async def b64_validator(initial_data: dict) -> bool:
     try:
         # Armamos el payload
         data = json.dumps(initial_data).encode("utf-8")
-        logger.info(f"aqui estaaaa el initial_data {initial_data}")
+        
 
         # Creamos la request
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
